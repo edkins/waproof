@@ -35,8 +35,10 @@ let a := left O y in
 let b := right O y in
 f t r a s /\
 g u r b s /\
-(forall c q, f c q c q -> g u q u q /\ g b q b q) /\
-(forall d q, g d q d q -> f t q t q /\ f a q a q).
+(forall c q, f t r c q -> g u q u q) /\
+(forall c q, f a s c q -> g b q b q) /\
+(forall d q, g u r d q -> f t q t q) /\
+(forall d q, g b s d q -> f a q a q).
 
 Lemma pre_valid_concatf
   {V:Set} {W:Set} {X:Set} {S:Set} (O:Op V W X)
@@ -46,14 +48,10 @@ Lemma pre_valid_concatf
 Proof.
 unfold pre_valid. intros.
 unfold concatf in H1.
-destruct H1. destruct H2. destruct H3.
+destruct H1. destruct H2. destruct H3. destruct H4. destruct H5.
 unfold concatf. intuition.
 exact (H (left O t) r (left O u) s H1).
 exact (H0 (right O t) r (right O u) s H2).
-exact (proj1 (H3 c q H5)).
-exact (proj1 (H3 c q H5)).
-exact (proj1 (H4 d q H5)).
-exact (proj1 (H4 d q H5)).
 Qed.
 
 Lemma post_valid_concatf
@@ -64,14 +62,10 @@ Lemma post_valid_concatf
 Proof.
 unfold post_valid. intros.
 unfold concatf in H1.
-destruct H1. destruct H2. destruct H3.
+destruct H1. destruct H2. destruct H3. destruct H4. destruct H5.
 unfold concatf. intuition.
 exact (H (left O t) r (left O u) s H1).
 exact (H0 (right O t) r (right O u) s H2).
-exact (proj2 (H3 c q H5)).
-exact (proj2 (H3 c q H5)).
-exact (proj2 (H4 d q H5)).
-exact (proj2 (H4 d q H5)).
 Qed.
 
 Lemma trans_valid_concatf
@@ -81,15 +75,11 @@ Lemma trans_valid_concatf
   : trans_valid f -> trans_valid g -> trans_valid (concatf O f g).
 Proof.
 unfold trans_valid. intros.
-unfold concatf in H1. destruct H1. destruct H3. destruct H4.
-unfold concatf in H2. destruct H2. destruct H6. destruct H7.
+unfold concatf in H1. destruct H1. destruct H3. destruct H4. destruct H5. destruct H6.
+unfold concatf in H2. destruct H2. destruct H8. destruct H9. destruct H10. destruct H11.
 unfold concatf. intuition.
 - apply (H _ _ (left O u) s _ _). trivial. trivial.
 - apply (H0 _ _ (right O u) s _ _). trivial. trivial.
-- exact (proj1 (H4 c q0 H9)).
-- exact (proj2 (H7 c q0 H9)).
-- exact (proj1 (H5 d q0 H9)).
-- exact (proj2 (H8 d q0 H9)).
 Qed.
 
 Definition type_concat {V:Set} {W:Set} {X:Set} {S:Set} (O:Op V W X) (T:Typ V S) (U:Typ W S) : Typ X S :=
@@ -134,14 +124,12 @@ destruct U.
 trivial.
 Qed.
 
-(*
 Lemma subtype_concatl {V:Set} {W:Set} {X:Set} {S:Set} (O:Op V W X) (T0:Typ V S) (T1:Typ V S) (U:Typ W S)
   : subtype T0 T1 -> subtype (type_concat O T0 U) (type_concat O T1 U).
 unfold subtype.
 rewrite tr_concat. rewrite tr_concat.
 unfold concatf.
 intros.
-destruct H0. destruct H1. destruct H2.
+destruct H0. destruct H1. destruct H2. destruct H3. destruct H4.
 intuition.
-apply
-*)
+apply (H2 (left O u)).
