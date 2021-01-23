@@ -1,0 +1,4 @@
+#[expand]
+fn foo(x:N) -> bool {
+	x == 3
+}
