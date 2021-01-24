@@ -13,40 +13,39 @@ pub fn derive_parse(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
-    let parse_body = match parse_attribs(&input.attrs) {
+    let (parse_body, display_body) = match parse_attribs(&input.attrs) {
         TypeOfThing::Symbol(sym) => {
             if !is_span_struct(&input) {
                 panic!("#[symbol] can only be attached to a struct with a single unnamed Span param");
             }
-            gen_sym(name, &sym)
+            (gen_sym(name, &sym), gen_sym_display(&sym))
         }
         TypeOfThing::Keyword(keyword) => {
             if !is_span_struct(&input) {
                 panic!("#[keyword] can only be attached to a struct with a single unnamed Span param");
             }
-            gen_keyword(name, &keyword)
+            (gen_keyword(name, &keyword), gen_keyword_display(&keyword))
         }
         TypeOfThing::Structure => {
             if let Some(fields) = is_named_struct(&input) {
-                gen_struct(name, &fields)
+                (gen_struct(name, &fields), gen_struct_display(&fields))
             } else {
                 panic!("Structure must have named fields");
             }
         }
     };
 
-    gen_impl(name, parse_body).into()
+    gen_impls(name, parse_body, display_body).into()
 }
 
 fn gen_struct(name: &Ident, fields: &[Field]) -> TokenStream {
     let lines:Vec<_> = fields.iter().map(gen_struct_line).collect();
     let field_names:Vec<_> = fields.iter().map(|f| f.ident.clone()).collect();
-
     quote! {
         #(#lines)*
-        Ok(input, #name {
+        Ok((input, #name {
             #(#field_names,)*
-        })
+        }))
     }
 }
 
@@ -55,6 +54,33 @@ fn gen_struct_line(f: &Field) -> TokenStream {
     let ty = &f.ty;
     quote! {
         let (input,#name) = #ty::parse(input)?;
+    }
+}
+
+fn gen_struct_display(fields: &[Field]) -> TokenStream {
+    let lines:Vec<_> = fields.iter().map(gen_struct_display_line).collect();
+    quote! {
+        #(#lines)*
+        Ok(())
+    }
+}
+
+fn gen_struct_display_line(f: &Field) -> TokenStream {
+    let name = &f.ident;
+    quote! {
+        write!(f, "{}", self.#name)?;
+    }
+}
+
+fn gen_sym_display(sym: &str) -> TokenStream {
+    quote! {
+        write!(f, "{}", #sym)
+    }
+}
+
+fn gen_keyword_display(keyword: &str) -> TokenStream {
+    quote! {
+        write!(f, "{} ", #keyword)
     }
 }
 
@@ -72,11 +98,16 @@ fn gen_keyword(name: &Ident, keyword: &str) -> TokenStream {
     }
 }
 
-fn gen_impl(name: &Ident, parse_body: TokenStream) -> TokenStream {
+fn gen_impls(name: &Ident, parse_body: TokenStream, display_body: TokenStream) -> TokenStream {
     quote! {
         impl lang_stuff::Parse for #name {
             fn parse(input: &str) -> nom::IResult<&str, Self, lang_stuff::Error> {
                 #parse_body
+            }
+        }
+        impl std::fmt::Display for #name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                #display_body
             }
         }
     }

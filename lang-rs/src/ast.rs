@@ -1,26 +1,31 @@
-use lang_stuff::Span;
+use lang_stuff::{Span,Word};
 
 #[derive(Parse)]
 #[symbol("#")]
 pub struct Hash(pub Span);
 
-/*
-pub struct Word {
-    string: String,
-    span: Span,
-}
+#[derive(Parse)]
+#[symbol("[")]
+pub struct OpenSquare(pub Span);
 
+#[derive(Parse)]
+#[symbol("]")]
+pub struct ClosedSquare(pub Span);
+
+#[derive(Parse)]
 pub struct Attribute {
-    hash: Span,
-    open: Span,
-    word: Word,
-    close: Span,
+    pub hash: Hash,
+    pub open: OpenSquare,
+    pub word: Word,
+    pub close: ClosedSquare,
 }
 
+/*
+#[derive(Parse)]
 pub struct Arg {
     name: Word,
     colon: Span,
-    
+    ty: Type,
 }
 
 pub struct Func {
