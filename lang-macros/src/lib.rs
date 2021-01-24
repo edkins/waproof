@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident,quote};
 use syn::{Attribute,Data,DeriveInput,Field,Fields,Ident,Lit,Meta,NestedMeta,Type,Variant,parse_macro_input};
 
 enum TypeOfThing {
@@ -11,11 +11,25 @@ enum TypeOfThing {
 enum TypeOfVariant {
     Symbol(String),
     Keyword(String),
-    Passthrough(Type),
+    Concat(Vec<Type>),
+}
+
+struct ToDerive {
+    parse: bool,
+    display: bool,
 }
 
 #[proc_macro_derive(Parse, attributes(symbol, keyword))]
 pub fn derive_parse(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    derive_things(input, ToDerive{parse:true, display:true})
+}
+
+#[proc_macro_derive(ParseDisplay, attributes(symbol, keyword))]
+pub fn derive_display(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    derive_things(input, ToDerive{parse:false, display:true})
+}
+
+fn derive_things(input: proc_macro::TokenStream, to_derive: ToDerive) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
@@ -43,7 +57,7 @@ pub fn derive_parse(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         }
     };
 
-    gen_impls(name, parse_body, display_body).into()
+    gen_impls(name, parse_body, display_body, to_derive).into()
 }
 
 /////////////////
@@ -66,25 +80,22 @@ fn gen_struct_display_line(f: &Field) -> TokenStream {
         let segs = &p.path.segments;
         if segs.len() == 1 && &segs[0].ident.to_string() == "Option" {
             // Can't implement Display on Option<T>, so we have to special-case it.
-            quote! {
+            return quote! {
                 if let Some(x) = &self.#name {
                     write!(f, "{}", x)?;
                 }
             }
         } else if segs.len() == 1 && &segs[0].ident.to_string() == "Vec" {
             // Similarly with Vec
-            quote! {
+            return quote! {
                 for x in &self.#name {
                     write!(f, "{}", x)?;
                 }
             }
-        } else {
-            quote! {
-                write!(f, "{}", self.#name)?;
-            }
         }
-    } else {
-        panic!("foo");
+    }
+    quote! {
+        write!(f, "{}", self.#name)?;
     }
 }
 
@@ -106,8 +117,15 @@ fn gen_enum_display_line(variant: &Variant) -> TokenStream {
         TypeOfVariant::Keyword(keyword) => quote! {
             Self::#name(_) => write!(f, "{} ", #keyword),
         },
-        TypeOfVariant::Passthrough(_) => quote! {
-            Self::#name(x) => write!(f, "{}", x),
+        TypeOfVariant::Concat(ts) => {
+            let xs:Vec<_> = (0..ts.len()).map(|i|format_ident!("x{}",i)).collect();
+            let lines:Vec<_> = (0..ts.len()).map(|i|{let x = &xs[i]; quote!{write!(f,"{}",#x)?;}}).collect();
+            quote! {
+                Self::#name(#(#xs,)*) => {
+                    #(#lines)*
+                    Ok(())
+                }
+            }
         },
     }
 }
@@ -174,8 +192,11 @@ fn gen_enum_line(variant: &Variant) -> TokenStream {
         TypeOfVariant::Keyword(keyword) => quote! {
             nom::combinator::map(lang_stuff::spanned_keyword(#keyword), Self::#name)
         },
-        TypeOfVariant::Passthrough(ty) => quote! {
-            nom::combinator::map(<#ty>::parse, Self::#name)
+        TypeOfVariant::Concat(ts) => {
+            let xs:Vec<_> = (0..ts.len()).map(|i|format_ident!("x{}",i)).collect();
+            quote! {
+                nom::combinator::map(nom::sequence::tuple((#(<#ts>::parse,)*)), |(#(#xs,)*)|Self::#name(#(#xs,)*))
+            }
         },
     }
 }
@@ -194,19 +215,32 @@ fn gen_keyword(name: &Ident, keyword: &str) -> TokenStream {
     }
 }
 
-fn gen_impls(name: &Ident, parse_body: TokenStream, display_body: TokenStream) -> TokenStream {
-    quote! {
-        impl lang_stuff::Parse for #name {
-            fn parse(input: &str) -> nom::IResult<&str, Self, lang_stuff::Error> {
-                #parse_body
+fn gen_impls(name: &Ident, parse_body: TokenStream, display_body: TokenStream, to_derive: ToDerive) -> TokenStream {
+    let parse = if to_derive.parse {
+        quote! {
+            impl lang_stuff::Parse for #name {
+                fn parse(input: &str) -> nom::IResult<&str, Self, lang_stuff::Error> {
+                    #parse_body
+                }
             }
         }
-        impl std::fmt::Display for #name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                #display_body
+    } else {
+        quote!{}
+    };
+
+    let display = if to_derive.display {
+        quote! {
+            impl std::fmt::Display for #name {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    #display_body
+                }
             }
         }
-    }
+    } else {
+        quote!{}
+    };
+
+    quote!{ #parse #display }
 }
 
 /////////////
@@ -240,11 +274,9 @@ fn is_span_variant(variant: &Variant) -> bool {
     false
 }
 
-fn is_single_arg_variant(variant: &Variant) -> Option<Type> {
+fn is_unnamed_arg_variant(variant: &Variant) -> Option<Vec<Type>> {
     if let Fields::Unnamed(un) = &variant.fields {
-        if un.unnamed.len() == 1 {
-            return Some(un.unnamed[0].ty.clone())
-        }
+        return Some(un.unnamed.iter().map(|u|u.ty.clone()).collect())
     }
     None
 }
@@ -312,8 +344,8 @@ fn get_type_of_variant(variant: &Variant) -> TypeOfVariant {
                 panic!("Enum variant {} must have a single Span param", variant.ident);
             }
         TypeOfThing::Structure =>
-            if let Some(ty) = is_single_arg_variant(variant) {
-                TypeOfVariant::Passthrough(ty)
+            if let Some(ts) = is_unnamed_arg_variant(variant) {
+                TypeOfVariant::Concat(ts)
             } else {
                 panic!("Enum variant {} must have a single param", variant.ident);
             }
