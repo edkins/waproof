@@ -5,13 +5,13 @@ use clap::clap_app;
 use std::io::ErrorKind;
 use std::fs;
 
-use crate::ast::Func;
+use crate::ast::Module;
 use lang_stuff::Parse;
 
 mod ast;
 
-fn parse(input: &str) -> std::io::Result<Func> {
-    match Func::parse(input) {
+fn parse(input: &str) -> std::io::Result<Module> {
+    match Module::parse(input) {
         Ok((_,ast)) => Ok(ast),
         Err(e) => Err(std::io::Error::new(ErrorKind::Other, e))
     }

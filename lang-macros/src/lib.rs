@@ -76,26 +76,30 @@ fn gen_struct_display(fields: &[Field]) -> TokenStream {
 
 fn gen_struct_display_line(f: &Field) -> TokenStream {
     let name = &f.ident;
-    if let Type::Path(p) = &f.ty {
+    write(&f.ty, quote!{&self.#name})
+}
+
+fn write(ty: &Type, name: TokenStream) -> TokenStream {
+    if let Type::Path(p) = ty {
         let segs = &p.path.segments;
         if segs.len() == 1 && &segs[0].ident.to_string() == "Option" {
             // Can't implement Display on Option<T>, so we have to special-case it.
             return quote! {
-                if let Some(x) = &self.#name {
+                if let Some(x) = #name {
                     write!(f, "{}", x)?;
                 }
             }
         } else if segs.len() == 1 && &segs[0].ident.to_string() == "Vec" {
             // Similarly with Vec
             return quote! {
-                for x in &self.#name {
+                for x in #name {
                     write!(f, "{}", x)?;
                 }
             }
         }
     }
     quote! {
-        write!(f, "{}", self.#name)?;
+        write!(f, "{}", #name)?;
     }
 }
 
@@ -119,7 +123,10 @@ fn gen_enum_display_line(variant: &Variant) -> TokenStream {
         },
         TypeOfVariant::Concat(ts) => {
             let xs:Vec<_> = (0..ts.len()).map(|i|format_ident!("x{}",i)).collect();
-            let lines:Vec<_> = (0..ts.len()).map(|i|{let x = &xs[i]; quote!{write!(f,"{}",#x)?;}}).collect();
+            let lines:Vec<_> = (0..ts.len()).map(|i|{
+                let x = &xs[i];
+                write(&ts[i],quote!{#x})
+            }).collect();
             quote! {
                 Self::#name(#(#xs,)*) => {
                     #(#lines)*

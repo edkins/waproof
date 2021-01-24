@@ -1,10 +1,11 @@
 use nom::IResult;
-use nom::bytes::complete::{tag,take_while};
-use nom::character::complete::{digit1,multispace0,satisfy};
+use nom::branch::alt;
+use nom::bytes::complete::{tag,take_until,take_while};
+use nom::character::complete::{digit1,multispace1,satisfy};
 use nom::combinator::{map,opt,recognize,value};
 use nom::error::{ErrorKind, ParseError};
 use nom::multi::many0;
-use nom::sequence::pair;
+use nom::sequence::{pair,preceded};
 use num_bigint::BigUint;
 use std::fmt;
 use std::str::FromStr;
@@ -34,8 +35,12 @@ pub struct Span {
     pub end: PosFromEnd,
 }
 
+fn single_line_comment(input: &str) -> IResult<&str, &str, Error> {
+    preceded(tag("//"), take_until("\n"))(input)
+}
+
 pub fn whitespace(input: &str) -> IResult<&str, (), Error> {
-    value((),multispace0)(input)
+    value((),many0(alt((multispace1,single_line_comment))))(input)
 }
 
 pub fn spanned_symbol(sym: &str) -> impl Fn(&str) -> IResult<&str, Span, Error> + '_ {
