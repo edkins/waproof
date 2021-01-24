@@ -1,8 +1,9 @@
 use nom::IResult;
 use nom::bytes::complete::{tag,take_while};
 use nom::character::complete::{multispace0,satisfy};
-use nom::combinator::{recognize,value};
+use nom::combinator::{opt,recognize,value};
 use nom::error::{ErrorKind, ParseError};
+use nom::multi::many0;
 use nom::sequence::pair;
 use std::fmt;
 
@@ -34,12 +35,37 @@ pub fn whitespace(input: &str) -> IResult<&str, (), Error> {
     value((),multispace0)(input)
 }
 
-pub fn spanned_symbol<'a>(input: &'a str, sym: &str) -> IResult<&'a str, Span, Error> {
-    let (input, _) = whitespace(input)?;
-    let start = input.len();
-    let (input, _) = tag(sym)(input)?;
-    let end = input.len();
-    Ok((input,Span{start,end}))
+pub fn spanned_symbol(sym: &str) -> impl Fn(&str) -> IResult<&str, Span, Error> + '_ {
+    move |input| {
+        let (input, _) = whitespace(input)?;
+        let start = input.len();
+        let (input, _) = tag(sym)(input)?;
+        let end = input.len();
+        Ok((input,Span{start,end}))
+    }
+}
+
+fn not_at_alphanum(input: &str) -> IResult<&str, (), Error> {
+    if let Some(ch) = input.chars().next() {
+        if ch.is_ascii_alphanumeric() {
+            Err(nom::Err::Error(Error{}))
+        } else {
+            Ok((input, ()))
+        }
+    } else {
+        Ok((input, ()))
+    }
+}
+
+pub fn spanned_keyword(keyword: &str) -> impl Fn(&str) -> IResult<&str, Span, Error> + '_ {
+    move |input| {
+        let (input, _) = whitespace(input)?;
+        let start = input.len();
+        let (input, _) = tag(keyword)(input)?;
+        let (input, _) = not_at_alphanum(input)?;
+        let end = input.len();
+        Ok((input,Span{start,end}))
+    }
 }
 
 pub struct Word {
@@ -70,6 +96,18 @@ impl Parse for Word {
 
 impl fmt::Display for Word {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", &self.string)
+        write!(f, "{} ", &self.string)
+    }
+}
+
+impl<T:Parse> Parse for Option<T> {
+    fn parse(input: &str) -> IResult<&str, Self, Error> {
+        opt(T::parse)(input)
+    }
+}
+
+impl<T:Parse> Parse for Vec<T> {
+    fn parse(input: &str) -> IResult<&str, Self, Error> {
+        many0(T::parse)(input)
     }
 }
