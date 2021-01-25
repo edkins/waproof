@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
-use lang_stuff::{Error,Word,PosFromEnd};
+use lang_stuff::{Error,Word,Parse,PosFromEnd};
 use crate::ast::{Expr,Func,FuncBodyOpt,Module,Type};
 use crate::semantic::{Exp,ExpBody,Name,OuterEnv,Typ};
 
@@ -17,10 +17,18 @@ impl Type {
     }
 }
 
+#[derive(Clone,Eq,PartialEq)]
+enum FuncKind {
+    Primitive,
+    Axiom,
+    Theorem,
+}
+
 struct InnerEnv {
     outer: OuterEnv,
     inner: HashMap<String,usize>,
     typs: Vec<Typ>,
+    kind: FuncKind,
 }
 
 fn err(pos: PosFromEnd, msg: String) -> Error {
@@ -31,11 +39,12 @@ fn err(pos: PosFromEnd, msg: String) -> Error {
 }
 
 impl InnerEnv {
-    fn from_outer(outer: &OuterEnv) -> Self {
+    fn from_outer(outer: &OuterEnv, kind: FuncKind) -> Self {
         InnerEnv {
             outer: outer.clone(),
             inner: HashMap::new(),
-            typs: vec![]
+            typs: vec![],
+            kind,
         }
     }
     fn add(&mut self, string: &str, typ: Typ, pos: PosFromEnd) -> Result<(),Error> {
@@ -52,8 +61,8 @@ impl InnerEnv {
     }
     fn lookup(&self, string: &str, pos: PosFromEnd) -> Result<Exp,Error> {
         let name = Name::Str(string.to_owned());
-        if let Some(t) = self.outer.get(&name) {
-            Ok(self.closure(t.clone(), ExpBody::Const(name)))
+        if let Some(e) = self.outer.get(&name) {
+            Ok(self.closure(e.ty.clone(), ExpBody::Const(name)))
         } else if let Some(i) = self.inner.get(string) {
             Ok(self.closure(self.typs[*i].clone(), ExpBody::Var(*i)))
         } else {
@@ -68,23 +77,40 @@ impl InnerEnv {
 pub fn check_module(m: &Module) -> Result<(),Error> {
     let mut oenv = create_outer_env();
     for f in &m.funcs {
-        let (name,exp) = check_fn(&oenv, f)?;
-        oenv.insert(name, exp.ty);
+        let (name,exp) = check_fn(&oenv, f, false)?;
+        oenv.insert(name, exp);
     }
     Ok(())
 }
 
-pub fn check_fn(oenv: &OuterEnv, f: &Func) -> Result<(Name,Exp),Error> {
-    let mut lenv = InnerEnv::from_outer(oenv);
+fn check_fn(oenv: &OuterEnv, f: &Func, allow_axioms: bool) -> Result<(Name,Exp),Error> {
+    let kind = check_fn_attributes(f, allow_axioms)?;
+    let mut lenv = InnerEnv::from_outer(oenv, kind.clone());
     for arg in &f.args {
         lenv.add(&arg.name.string, arg.ty.to_typ(), arg.name.pos())?;
     }
-    let be;
-    match &f.body {
-        FuncBodyOpt::Body(b) => {
-            be = check_expr(&lenv, &b.expr)?;
+    let expr;
+    let rett = f.ret.as_ref().map(|r|r.ty.to_typ()).unwrap_or(Typ::Empty);
+    match (&f.body, kind) {
+        (FuncBodyOpt::Body(b), FuncKind::Theorem) |
+        (FuncBodyOpt::Body(b), FuncKind::Axiom) => {
+            let be = check_expr(&lenv, &b.expr)?;
+            if be.ty != rett {
+                return Err(err(b.open.0.start, format!("Declared return type is {:?}, actual return type is {:?}", rett, be.ty)));
+            }
+            expr = Exp{
+                ty: Typ::Func(be.free_vars.clone(), Box::new(be.ty.clone())),
+                free_vars: vec![],
+                body: ExpBody::Lambda(be.free_vars.clone(), Box::new(be)),
+            }
         }
-        FuncBodyOpt::Semicolon(s) => {
+        (FuncBodyOpt::Body(b), _) => {
+            return Err(err(b.open.0.start, "Expected no function body".to_owned()));
+        }
+        (FuncBodyOpt::Semicolon(_), FuncKind::Primitive) => {
+            expr = lenv.closure(Typ::Func(lenv.typs.clone(),Box::new(rett.clone())), ExpBody::Primitive);
+        }
+        (FuncBodyOpt::Semicolon(s), _) => {
             return Err(err(s.0.start, "Expected function body".to_owned()));
         }
     }
@@ -92,7 +118,27 @@ pub fn check_fn(oenv: &OuterEnv, f: &Func) -> Result<(Name,Exp),Error> {
     if oenv.contains_key(&name) {
         return Err(err(f.name.pos(),format!("Function name {} is already used in outer env", f.name.string)));
     }
-    Ok((name,be))
+    Ok((name,expr))
+}
+
+fn check_fn_attributes(f: &Func, allow_axioms: bool) -> Result<FuncKind,Error> {
+    if f.attrs.len() != 1 {
+        return Err(err(f.fun.0.start, "Expected exactly one attribute".to_owned()));
+    }
+    match &f.attrs[0].word.string as &str {
+        "primitive" => if allow_axioms {
+            Ok(FuncKind::Primitive)
+        } else {
+            Err(err(f.attrs[0].word.pos(), "Reserved attribute 'primitive' not supported in this context".to_owned()))
+        }
+        "axiom" => if allow_axioms {
+            Ok(FuncKind::Axiom)
+        } else {
+            Err(err(f.attrs[0].word.pos(), "Reserved attribute 'axiom' not supported in this context".to_owned()))
+        }
+        "theorem" => Ok(FuncKind::Theorem),
+        _ => Err(err(f.attrs[0].word.pos(), format!("Unrecognized attribute {}", f.attrs[0].word)))
+    }
 }
 
 fn check_expr(env: &InnerEnv, main_expr:&Expr) -> Result<Exp,Error> {
@@ -122,6 +168,8 @@ fn check_expr(env: &InnerEnv, main_expr:&Expr) -> Result<Exp,Error> {
             let be;
             if let Some(b) = mb {
                 be = check_expr(env, &b.expr)?;
+            } else if env.kind == FuncKind::Axiom {
+                be = env.closure(Typ::Empty, ExpBody::Primitive);
             } else {
                 return Err(err(conclude.0.start, "Expected 'by' clause".to_owned()));
             }
@@ -148,10 +196,10 @@ fn check_expr(env: &InnerEnv, main_expr:&Expr) -> Result<Exp,Error> {
             check_expr(env,x)
         }
         Expr::Eq(x,o,y) => {
-            call(env, "==", &[&**x,&**y], o.0.start)
+            call(env, "eq", &[&**x,&**y], o.0.start)
         }
         Expr::Imp(x,o,y) => {
-            call(env, "->", &[&**x,&**y], o.0.start)
+            call(env, "imp", &[&**x,&**y], o.0.start)
         }
     }
 }
@@ -171,15 +219,33 @@ fn call(env: &InnerEnv, f: &str, xs: &[&Expr], pos: PosFromEnd) -> Result<Exp,Er
         }
         rett = *rt.clone();
     } else {
-        return Err(err(pos,format!("Item being called is not a function. Type is {:?}", fe.ty)));
+        return Err(err(pos,format!("Item being called is not a function. Type is {:?}. Value is {}", fe.ty, f)));
     }
     Ok(env.closure(rett, ExpBody::Call(Box::new(fe),xes)))
 }
 
 fn create_outer_env() -> OuterEnv {
-    let mut m = HashMap::new();
-    m.insert(Name::Str("->".to_owned()), Typ::Func(vec![Typ::Bool,Typ::Bool],Box::new(Typ::Bool)));
-    m.insert(Name::Str("a1".to_owned()), Typ::Func(vec![Typ::Bool,Typ::Bool],Box::new(Typ::Empty)));
-    m.insert(Name::Str("a2".to_owned()), Typ::Func(vec![Typ::Bool,Typ::Bool,Typ::Bool],Box::new(Typ::Empty)));
-    m
+    // We write this as code simply because it's more convenient than writing out all the nodes in
+    // Rust.
+    let code = "
+#[primitive]
+fn imp(a:bool, b:bool) -> bool;
+
+#[axiom]
+fn a1(a:bool, b:bool) {
+    conclude a -> b -> a
+}
+
+#[axiom]
+fn a2(a:bool, b:bool, c:bool) {
+    conclude (a -> b -> c) -> (a -> b) -> (a -> c)
+}
+";
+    let module = Module::parse(code).unwrap().1;
+    let mut oenv = HashMap::new();
+    for f in &module.funcs {
+        let (name,exp) = check_fn(&oenv, f, true).unwrap();
+        oenv.insert(name, exp);
+    }
+    oenv
 }

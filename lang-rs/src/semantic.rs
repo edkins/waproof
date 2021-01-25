@@ -5,8 +5,6 @@ use std::collections::HashMap;
 pub enum Name {
     Str(String),
     Num(BigUint),
-    Imp,
-    Eq,
 }
 
 #[derive(Clone,Debug,Eq,PartialEq)]
@@ -33,6 +31,7 @@ pub enum ExpBody {
     Assert(Box<Exp>,Box<Exp>,Box<Exp>),
     Conclude(Box<Exp>,Box<Exp>),
     Mp(usize,usize),
+    Primitive,
 }
 
-pub type OuterEnv = HashMap<Name,Typ>;
+pub type OuterEnv = HashMap<Name,Exp>;
