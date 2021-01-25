@@ -32,6 +32,7 @@ pub enum ExpBody {
     Lambda(Vec<Typ>,Box<Exp>),
     Assert(Box<Exp>,Box<Exp>,Box<Exp>),
     Conclude(Box<Exp>,Box<Exp>),
+    Mp(usize,usize),
 }
 
 pub type OuterEnv = HashMap<Name,Typ>;

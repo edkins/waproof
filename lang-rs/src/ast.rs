@@ -130,6 +130,10 @@ pub struct By(pub Span);
 pub struct Conclude(pub Span);
 
 #[derive(Clone,Parse)]
+#[keyword("mp")]
+pub struct Mp(pub Span);
+
+#[derive(Clone,Parse)]
 pub struct ByClause {
     pub by: By,
     pub expr: Box<Expr>,
@@ -140,6 +144,7 @@ pub enum Expr {
     Num(Num),
     Assert(Assert,Box<Expr>,Option<ByClause>,Semicolon,Box<Expr>),
     Conclude(Conclude,Box<Expr>,Option<ByClause>),
+    Mp(Mp,OpenParen,Num,Comma,Num,ClosedParen),
     Call(Word,OpenParen,Vec<CallArg>,ClosedParen),
     Var(Word),
     Paren(OpenParen,Box<Expr>,ClosedParen),
@@ -153,6 +158,7 @@ fn parse_expr(max_level: usize) -> impl Fn(&str) -> IResult<&str, Expr, Error> {
             map(Num::parse, Expr::Num),
             map(tuple((Assert::parse, parse_expr(0), opt(tuple((By::parse,parse_expr(0)))), Semicolon::parse, parse_expr(0))), |(a,e,b,s,x)|Expr::Assert(a,Box::new(e),b.map(|(by,be)|ByClause{by,expr:Box::new(be)}),s,Box::new(x))),
             map(tuple((Conclude::parse, parse_expr(0), opt(tuple((By::parse,parse_expr(0)))))), |(c,e,b)|Expr::Conclude(c,Box::new(e),b.map(|(by,be)|ByClause{by,expr:Box::new(be)}))),
+            map(tuple((Mp::parse, OpenParen::parse, Num::parse, Comma::parse, Num::parse, ClosedParen::parse)), |(m,o,a,d,b,c)|Expr::Mp(m,o,a,d,b,c)),
             map(tuple((Word::parse, OpenParen::parse, Vec::<CallArg>::parse, ClosedParen::parse)), |(f,o,a,c)|Expr::Call(f,o,a,c)),
             map(Word::parse, Expr::Var),
             map(tuple((OpenParen::parse, parse_expr(0), ClosedParen::parse)), |(o,e,c)|Expr::Paren(o,Box::new(e),c)),

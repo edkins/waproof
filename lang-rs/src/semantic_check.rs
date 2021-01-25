@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::convert::TryInto;
 use lang_stuff::{Error,Word,PosFromEnd};
 use crate::ast::{Expr,Func,FuncBodyOpt,Module,Type};
 use crate::semantic::{Exp,ExpBody,Name,OuterEnv,Typ};
@@ -132,6 +133,11 @@ fn check_expr(env: &InnerEnv, main_expr:&Expr) -> Result<Exp,Error> {
             }
             Ok(env.closure(Typ::Empty, ExpBody::Conclude(Box::new(ae), Box::new(be))))
         }
+        Expr::Mp(mp,_,a,_,b,_) => {
+            let au = a.clone().n.try_into().map_err(|_|err(mp.0.start, format!("Integer overflow on {}", a)))?;
+            let bu = b.clone().n.try_into().map_err(|_|err(mp.0.start, format!("Integer overflow on {}", a)))?;
+            Ok(env.closure(Typ::Empty, ExpBody::Mp(au, bu)))
+        }
         Expr::Call(f,_,xs,_) => {
             call(env, &f.string, &xs.iter().map(|a|&a.expr).collect::<Vec<_>>(), f.pos())
         }
@@ -175,6 +181,5 @@ fn create_outer_env() -> OuterEnv {
     m.insert(Name::Str("->".to_owned()), Typ::Func(vec![Typ::Bool,Typ::Bool],Box::new(Typ::Bool)));
     m.insert(Name::Str("a1".to_owned()), Typ::Func(vec![Typ::Bool,Typ::Bool],Box::new(Typ::Empty)));
     m.insert(Name::Str("a2".to_owned()), Typ::Func(vec![Typ::Bool,Typ::Bool,Typ::Bool],Box::new(Typ::Empty)));
-    m.insert(Name::Str("mp".to_owned()), Typ::Func(vec![Typ::Nat,Typ::Nat],Box::new(Typ::Empty)));
     m
 }
