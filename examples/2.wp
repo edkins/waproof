@@ -2,6 +2,7 @@
 
 //axiom schema a2(a:bool, b:bool, c:bool) { (a -> b -> c) -> (a -> b) -> (a -> c) }
 
+#[theorem]
 fn x_imp_x(x: bool) {
     assert x -> x -> x by a1(x,x);
     assert x -> (x -> x) -> x by a1(x,x->x);

@@ -12,14 +12,30 @@ use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct Error {
+    pub msg: String,
+    pub positions: Vec<PosFromEnd>,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {:?}", self.msg, self.positions)
+    }
+}
+
+impl std::error::Error for Error {
 }
 
 impl ParseError<&str> for Error {
-    fn from_error_kind(_input: &str, _kind: ErrorKind) -> Self {
-        Error {}
+    fn from_error_kind(input: &str, kind: ErrorKind) -> Self {
+        Error {
+            msg: format!("{:?}", kind),
+            positions: vec![input.len()]
+        }
     }
-    fn append(_input: &str, _kind: ErrorKind, _other: Self) -> Self {
-        Error {}
+    fn append(input: &str, kind: ErrorKind, mut other: Self) -> Self {
+        other.msg.push_str(&format!(" {:?}", kind));
+        other.positions.push(input.len());
+        other
     }
 }
 
@@ -56,7 +72,10 @@ pub fn spanned_symbol(sym: &str) -> impl Fn(&str) -> IResult<&str, Span, Error> 
 fn not_at_alphanum(input: &str) -> IResult<&str, (), Error> {
     if let Some(ch) = input.chars().next() {
         if ch.is_ascii_alphanumeric() {
-            Err(nom::Err::Error(Error{}))
+            Err(nom::Err::Error(Error{
+                msg: "Not_alphanumeric".to_owned(),
+                positions: vec![input.len()]
+            }))
         } else {
             Ok((input, ()))
         }
@@ -88,6 +107,12 @@ fn starts_word(ch: char) -> bool {
 
 fn continues_word(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_'
+}
+
+impl Word {
+    pub fn pos(&self) -> PosFromEnd {
+        self.span.start
+    }
 }
 
 impl Parse for Word {
@@ -150,5 +175,11 @@ impl fmt::Display for Num {
 impl<T:Parse> Parse for Box<T> {
     fn parse(input: &str) -> IResult<&str, Self, Error> {
         map(T::parse, Box::new)(input)
+    }
+}
+
+impl From<Error> for std::io::Error {
+    fn from(e: Error) -> Self {
+        std::io::Error::new(std::io::ErrorKind::Other, e)
     }
 }

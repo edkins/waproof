@@ -70,10 +70,10 @@ pub enum Type {
 
 #[derive(Clone,Parse)]
 pub struct Arg {
-    name: Word,
-    colon: Colon,
-    ty: Type,
-    comma: Option<Comma>,
+    pub name: Word,
+    pub colon: Colon,
+    pub ty: Type,
+    pub comma: Option<Comma>,
 }
 
 #[derive(Clone,Parse)]
@@ -82,8 +82,8 @@ pub struct Fun(pub Span);
 
 #[derive(Clone,Parse)]
 pub struct ReturnType {
-    arrow: Arrow,
-    ty: Type,
+    pub arrow: Arrow,
+    pub ty: Type,
 }
 
 #[derive(Clone,Parse)]
@@ -94,27 +94,27 @@ pub enum FuncBodyOpt {
 
 #[derive(Clone,Parse)]
 pub struct FuncBody {
-    open: OpenBrace,
-    expr: Expr,
-    close: ClosedBrace,
+    pub open: OpenBrace,
+    pub expr: Expr,
+    pub close: ClosedBrace,
 }
 
 #[derive(Clone,Parse)]
 pub struct Func {
-    attrs: Vec<Attribute>,
-    fun: Fun,
-    name: Word,
-    open: OpenParen,
-    args: Vec<Arg>,
-    close: ClosedParen,
-    ret: Option<ReturnType>,
-    body: FuncBodyOpt,
+    pub attrs: Vec<Attribute>,
+    pub fun: Fun,
+    pub name: Word,
+    pub open: OpenParen,
+    pub args: Vec<Arg>,
+    pub close: ClosedParen,
+    pub ret: Option<ReturnType>,
+    pub body: FuncBodyOpt,
 }
 
 #[derive(Clone,Parse)]
 pub struct CallArg {
-    expr: Expr,
-    comma: Option<Comma>,
+    pub expr: Expr,
+    pub comma: Option<Comma>,
 }
 
 #[derive(Clone,Parse)]
@@ -131,8 +131,8 @@ pub struct Conclude(pub Span);
 
 #[derive(Clone,Parse)]
 pub struct ByClause {
-    by: By,
-    expr: Box<Expr>,
+    pub by: By,
+    pub expr: Box<Expr>,
 }
 
 #[derive(Clone,ParseDisplay)]
@@ -188,7 +188,7 @@ impl Parse for Expr {
 
 #[derive(Clone,ParseDisplay)]
 pub struct Module {
-    funcs: Vec<Func>,
+    pub funcs: Vec<Func>,
 }
 
 impl Parse for Module {
