@@ -1,7 +1,7 @@
 use num_bigint::BigUint;
 use std::collections::HashMap;
 
-#[derive(Clone,Eq,Hash,PartialEq)]
+#[derive(Clone,Debug,Eq,Hash,PartialEq)]
 pub enum Name {
     Str(String),
     Num(BigUint),

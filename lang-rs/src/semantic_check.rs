@@ -29,6 +29,7 @@ struct InnerEnv {
     inner: HashMap<String,usize>,
     typs: Vec<Typ>,
     kind: FuncKind,
+    assertions: Vec<Exp>,
 }
 
 fn err(pos: PosFromEnd, msg: String) -> Error {
@@ -45,6 +46,7 @@ impl InnerEnv {
             inner: HashMap::new(),
             typs: vec![],
             kind,
+            assertions: vec![],
         }
     }
     fn add(&mut self, string: &str, typ: Typ, pos: PosFromEnd) -> Result<(),Error> {
@@ -69,8 +71,25 @@ impl InnerEnv {
             Err(err(pos,format!("Name {} is not defined", string)))
         }
     }
+    fn lookup_conclusion(&self, name: &Name, pos: PosFromEnd) -> Result<Exp,Error> {
+        if let Some(e) = self.outer.get(&name) {
+            e.get_conclusion(pos)
+        } else {
+            Err(err(pos,format!("Name {:?} is not defined in outer environment", name)))
+        }
+    }
     fn closure(&self, ty: Typ, body: ExpBody) -> Exp {
         Exp{ty, body, free_vars: self.typs.clone()}
+    }
+}
+
+impl Exp {
+    fn get_conclusion(&self, pos: PosFromEnd) -> Result<Exp,Error> {
+        match &self.body {
+            ExpBody::Assert(_,_,e) => e.get_conclusion(pos),
+            ExpBody::Conclude(c,_) => Ok((**c).clone()),
+            _ => Err(err(pos,"Expression does not have conclusion".to_owned()))
+        }
     }
 }
 
@@ -141,6 +160,24 @@ fn check_fn_attributes(f: &Func, allow_axioms: bool) -> Result<FuncKind,Error> {
     }
 }
 
+fn check_assertion(env: &InnerEnv, expr:&Exp, by:&Exp, pos: PosFromEnd) -> Result<InnerEnv,Error> {
+    match by.body {
+        ExpBody::Mp(a,b) => {
+            if a >= env.assertions.len() {
+                return Err(err(pos, format!("Modus ponens assertion index {} is out of range", a)));
+            }
+            if b >= env.assertions.len() {
+                return Err(err(pos, format!("Modus ponens assertion index {} is out of range", b)));
+            }
+            let ae = env.assertions[a];
+            let be = env.assertions[b];
+            if ae == Exp {
+                ty: Typ::Bool,
+
+        }
+    }
+}
+
 fn check_expr(env: &InnerEnv, main_expr:&Expr) -> Result<Exp,Error> {
     match main_expr {
         Expr::Num(n) => {
@@ -154,13 +191,14 @@ fn check_expr(env: &InnerEnv, main_expr:&Expr) -> Result<Exp,Error> {
             } else {
                 return Err(err(assert.0.start, "Expected 'by' clause".to_owned()));
             }
-            let re = check_expr(env, r)?;
             if ae.ty != Typ::Bool {
                 return Err(err(assert.0.start, format!("Expected asserted expression to have type bool, got {:?}", ae.ty)));
             }
             if be.ty != Typ::Empty {
                 return Err(err(assert.0.start, format!("Expected by clause to have empty type, got {:?}", be.ty)));
             }
+            let env2 = check_assertion(env, &ae, &be)?;
+            let re = check_expr(env2, r)?;
             Ok(env.closure(re.ty.clone(), ExpBody::Assert(Box::new(ae), Box::new(be), Box::new(re))))
         }
         Expr::Conclude(conclude,a,mb) => {
@@ -179,6 +217,7 @@ fn check_expr(env: &InnerEnv, main_expr:&Expr) -> Result<Exp,Error> {
             if be.ty != Typ::Empty {
                 return Err(err(conclude.0.start, format!("Expected by clause to have empty type, got {:?}", be.ty)));
             }
+            check_assertion(env, &ae, &be)?;
             Ok(env.closure(Typ::Empty, ExpBody::Conclude(Box::new(ae), Box::new(be))))
         }
         Expr::Mp(mp,_,a,_,b,_) => {
