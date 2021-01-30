@@ -1,12 +1,8 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
-use lang_stuff::{Error,Word,Parse,PosFromEnd};
-use crate::ast::{Expr,Func,FuncBodyOpt,Module,Type};
-use crate::semantic::{Exp,ExpBody,Name,OuterEnv,Typ};
-
-fn to_name(w: &Word) -> Name {
-    Name::Str(w.string.clone())
-}
+use lang_stuff::{Error,Parse,PosFromEnd};
+use crate::ast::{Arg,Expr,Func,FuncBodyOpt,Module,Type};
+use crate::semantic::{CallHead,Exp,ExpBody,OuterEnv,OEnvThing,TheoremSchema,Typ};
 
 impl Type {
     fn to_typ(&self) -> Typ {
@@ -24,8 +20,10 @@ enum FuncKind {
     Theorem,
 }
 
+#[derive(Clone)]
 struct InnerEnv {
     outer: OuterEnv,
+    params: HashMap<String,Typ>,
     inner: HashMap<String,usize>,
     typs: Vec<Typ>,
     kind: FuncKind,
@@ -40,46 +38,62 @@ fn err(pos: PosFromEnd, msg: String) -> Error {
 }
 
 impl InnerEnv {
-    fn from_outer(outer: &OuterEnv, kind: FuncKind) -> Self {
-        InnerEnv {
+    fn from_outer(outer: &OuterEnv, kind: FuncKind, args: &[Arg]) -> Result<Self,Error> {
+        let mut params = HashMap::new();
+        for arg in args {
+            if params.contains_key(&arg.name.string) {
+                return Err(err(arg.name.pos(),format!("Duplicate parameter name {}", arg.name.string)));
+            }
+            if outer.contains_key(&arg.name.string) {
+                return Err(err(arg.name.pos(),format!("Parameter name is already used in outer env: {}", arg.name.string)));
+            }
+            params.insert(arg.name.string.clone(), arg.ty.to_typ());
+        }
+        Ok(InnerEnv {
             outer: outer.clone(),
+            params,
             inner: HashMap::new(),
             typs: vec![],
             kind,
             assertions: vec![],
+        })
+    }
+    fn lookup_call_head(&self, string: &str, pos: PosFromEnd) -> Result<(Typ,CallHead),Error> {
+        if let Some(e) = self.outer.get(string) {
+            Ok((e.ty.clone(), CallHead::Const(string.to_owned())))
+        } else if let Some(t) = self.params.get(string) {
+            Ok((t.clone(), CallHead::Param(string.to_owned())))
+        } else {
+            Err(err(pos,format!("Name {} is not defined or cannot be called", string)))
         }
     }
-    fn add(&mut self, string: &str, typ: Typ, pos: PosFromEnd) -> Result<(),Error> {
-        let name = Name::Str(string.to_owned());
-        if self.outer.contains_key(&name) {
-            return Err(err(pos,format!("Name {} is already used in outer env", string)));
-        }
-        if self.inner.contains_key(string) {
-            return Err(err(pos,format!("Name {} is already used in inner env", string)));
-        }
-        self.inner.insert(string.to_owned(), self.typs.len());
-        self.typs.push(typ);
-        Ok(())
-    }
-    fn lookup(&self, string: &str, pos: PosFromEnd) -> Result<Exp,Error> {
-        let name = Name::Str(string.to_owned());
-        if let Some(e) = self.outer.get(&name) {
-            Ok(self.closure(e.ty.clone(), ExpBody::Const(name)))
-        } else if let Some(i) = self.inner.get(string) {
+    fn lookup_expr(&self, string: &str, pos: PosFromEnd) -> Result<Exp,Error> {
+        if let Some(i) = self.inner.get(string) {
             Ok(self.closure(self.typs[*i].clone(), ExpBody::Var(*i)))
+        } else if let Ok((t,c)) = self.lookup_call_head(string, pos) {
+            Ok(self.closure(t, ExpBody::Const(c)))
         } else {
             Err(err(pos,format!("Name {} is not defined", string)))
         }
     }
-    fn lookup_conclusion(&self, name: &Name, pos: PosFromEnd) -> Result<Exp,Error> {
-        if let Some(e) = self.outer.get(&name) {
-            e.get_conclusion(pos)
+    fn lookup_theorem_schema(&self, name: &str, pos: PosFromEnd) -> Result<TheoremSchema,Error> {
+        if let Some(oe) = self.outer.get(name) {
+            if let Some(t) = &oe.theorem {
+                Ok(t.clone())
+            } else {
+                Err(err(pos,format!("Name {:?} is not a theorem", name)))
+            }
         } else {
             Err(err(pos,format!("Name {:?} is not defined in outer environment", name)))
         }
     }
     fn closure(&self, ty: Typ, body: ExpBody) -> Exp {
         Exp{ty, body, free_vars: self.typs.clone()}
+    }
+    fn with_assertion(&self, expr: &Exp) -> Self {
+        let mut result = self.clone();
+        result.assertions.push(expr.clone());
+        result
     }
 }
 
@@ -88,7 +102,26 @@ impl Exp {
         match &self.body {
             ExpBody::Assert(_,_,e) => e.get_conclusion(pos),
             ExpBody::Conclude(c,_) => Ok((**c).clone()),
-            _ => Err(err(pos,"Expression does not have conclusion".to_owned()))
+            _ => Err(err(pos,format!("Expression {} does not have conclusion", self)))
+        }
+    }
+    fn subst_params(&self, substs: &HashMap<String,Exp>, pos: PosFromEnd) -> Result<Exp,Error> {
+        match &self.body {
+            ExpBody::Var(_) => Ok(self.clone()),
+            ExpBody::Const(CallHead::Param(c)) => Ok(substs.get(c).unwrap().clone()),  // type checking should have ensured existence
+            ExpBody::Call(CallHead::Param(f), args) => {
+                //let args2 = args.iter().map(|a|a.subst_params(substs, pos)?).collect();
+                panic!();  // TODO
+            }
+            ExpBody::Call(CallHead::Const(c), args) => {
+                let args2:Vec<_> = args.iter().map(|a|a.subst_params(substs, pos)).collect::<Result<_,_>>()?;
+                Ok(Exp{
+                    ty: self.ty.clone(),
+                    free_vars: self.free_vars.clone(),
+                    body:ExpBody::Call(CallHead::Const(c.to_owned()), args2)
+                })
+            }
+            _ => panic!("Not expecting this expression type here: {}", self)
         }
     }
 }
@@ -96,48 +129,47 @@ impl Exp {
 pub fn check_module(m: &Module) -> Result<(),Error> {
     let mut oenv = create_outer_env();
     for f in &m.funcs {
-        let (name,exp) = check_fn(&oenv, f, false)?;
-        oenv.insert(name, exp);
+        let (name,ty,theorem) = check_fn(&oenv, f, false)?;
+        oenv.insert(name, OEnvThing{ty,theorem});
     }
     Ok(())
 }
 
-fn check_fn(oenv: &OuterEnv, f: &Func, allow_axioms: bool) -> Result<(Name,Exp),Error> {
+fn check_fn(oenv: &OuterEnv, f: &Func, allow_axioms: bool) -> Result<(String,Typ,Option<TheoremSchema>),Error> {
     let kind = check_fn_attributes(f, allow_axioms)?;
-    let mut lenv = InnerEnv::from_outer(oenv, kind.clone());
-    for arg in &f.args {
-        lenv.add(&arg.name.string, arg.ty.to_typ(), arg.name.pos())?;
-    }
-    let expr;
+    let lenv = InnerEnv::from_outer(oenv, kind.clone(), &f.args)?;
+    let params:Vec<_> = f.args.iter().map(|a|(a.name.string.clone(),a.ty.to_typ())).collect();
     let rett = f.ret.as_ref().map(|r|r.ty.to_typ()).unwrap_or(Typ::Empty);
-    match (&f.body, kind) {
+    let param_types:Vec<_> = params.iter().map(|p|p.1.clone()).collect();
+    let fty = Typ::Func(param_types,Box::new(rett.clone()));
+
+    if oenv.contains_key(&f.name.string) {
+        return Err(err(f.name.pos(),format!("Function name {} is already used in outer env", f.name.string)));
+    }
+
+    let theorem = match (&f.body, &kind) {
         (FuncBodyOpt::Body(b), FuncKind::Theorem) |
         (FuncBodyOpt::Body(b), FuncKind::Axiom) => {
             let be = check_expr(&lenv, &b.expr)?;
             if be.ty != rett {
                 return Err(err(b.open.0.start, format!("Declared return type is {:?}, actual return type is {:?}", rett, be.ty)));
             }
-            expr = Exp{
-                ty: Typ::Func(be.free_vars.clone(), Box::new(be.ty.clone())),
-                free_vars: vec![],
-                body: ExpBody::Lambda(be.free_vars.clone(), Box::new(be)),
+            if !be.free_vars.is_empty() {
+                return Err(err(b.open.0.start, "Not expecting free vars here".to_owned()));
             }
+            let conc = be.get_conclusion(f.name.pos())?;
+            Some(TheoremSchema{params, conc})
         }
         (FuncBodyOpt::Body(b), _) => {
             return Err(err(b.open.0.start, "Expected no function body".to_owned()));
         }
-        (FuncBodyOpt::Semicolon(_), FuncKind::Primitive) => {
-            expr = lenv.closure(Typ::Func(lenv.typs.clone(),Box::new(rett.clone())), ExpBody::Primitive);
-        }
+        (FuncBodyOpt::Semicolon(_), FuncKind::Primitive) => {None}
         (FuncBodyOpt::Semicolon(s), _) => {
             return Err(err(s.0.start, "Expected function body".to_owned()));
         }
-    }
-    let name = to_name(&f.name);
-    if oenv.contains_key(&name) {
-        return Err(err(f.name.pos(),format!("Function name {} is already used in outer env", f.name.string)));
-    }
-    Ok((name,expr))
+    };
+
+    Ok((f.name.string.clone(),fty,theorem))
 }
 
 fn check_fn_attributes(f: &Func, allow_axioms: bool) -> Result<FuncKind,Error> {
@@ -161,27 +193,54 @@ fn check_fn_attributes(f: &Func, allow_axioms: bool) -> Result<FuncKind,Error> {
 }
 
 fn check_assertion(env: &InnerEnv, expr:&Exp, by:&Exp, pos: PosFromEnd) -> Result<InnerEnv,Error> {
-    match by.body {
+    match &by.body {
         ExpBody::Mp(a,b) => {
-            if a >= env.assertions.len() {
+            if *a >= env.assertions.len() {
                 return Err(err(pos, format!("Modus ponens assertion index {} is out of range", a)));
             }
-            if b >= env.assertions.len() {
+            if *b >= env.assertions.len() {
                 return Err(err(pos, format!("Modus ponens assertion index {} is out of range", b)));
             }
-            let ae = env.assertions[a];
-            let be = env.assertions[b];
-            if ae == Exp {
+            let ae = &env.assertions[*a];
+            let be = &env.assertions[*b];
+            let expected = Exp {
                 ty: Typ::Bool,
-
+                free_vars: vec![],
+                body: ExpBody::Call(CallHead::Const("imp".to_owned()), vec![be.clone(),expr.clone()])
+            };
+            if *ae == expected {
+                Ok(env.with_assertion(expr))
+            } else {
+                Err(err(pos, format!("Modus ponens mismatch:\nExpected {}\nGot      {}", expected, ae)))
+            }
         }
+        ExpBody::Call(CallHead::Const(name), args) => {
+            let theorem = env.lookup_theorem_schema(&name, pos)?;
+            
+            // This shouldn't happen? Already type checked.
+            if theorem.params.len() != args.len() {
+                return Err(err(pos, format!("Theorem takes {} parameters. {} were supplied", theorem.params.len(), args.len())));
+            }
+
+            let mut substs = HashMap::new();
+            for i in 0..theorem.params.len() {
+                substs.insert(theorem.params[i].0.clone(), args[i].clone());
+            }
+            let conc = theorem.conc.subst_params(&substs, pos)?;
+            if *expr == conc {
+                Ok(env.with_assertion(expr))
+            } else {
+                Err(err(pos, "Wrong conclusion".to_owned()))
+            }
+        }
+        _ => Err(err(pos, format!("Expression {} is not a theorem reference", by)))
     }
 }
 
 fn check_expr(env: &InnerEnv, main_expr:&Expr) -> Result<Exp,Error> {
     match main_expr {
         Expr::Num(n) => {
-            Ok(env.closure(Typ::Nat, ExpBody::Const(Name::Num(n.n.clone()))))
+            Ok(env.closure(Typ::Nat, ExpBody::Const(CallHead::Num(n.n.clone()))))
         }
         Expr::Assert(assert,a,mb,_semicolon,r) => {
             let ae = check_expr(env, a)?;
@@ -197,8 +256,8 @@ fn check_expr(env: &InnerEnv, main_expr:&Expr) -> Result<Exp,Error> {
             if be.ty != Typ::Empty {
                 return Err(err(assert.0.start, format!("Expected by clause to have empty type, got {:?}", be.ty)));
             }
-            let env2 = check_assertion(env, &ae, &be)?;
-            let re = check_expr(env2, r)?;
+            let env2 = check_assertion(env, &ae, &be, assert.0.start)?;
+            let re = check_expr(&env2, r)?;
             Ok(env.closure(re.ty.clone(), ExpBody::Assert(Box::new(ae), Box::new(be), Box::new(re))))
         }
         Expr::Conclude(conclude,a,mb) => {
@@ -217,7 +276,10 @@ fn check_expr(env: &InnerEnv, main_expr:&Expr) -> Result<Exp,Error> {
             if be.ty != Typ::Empty {
                 return Err(err(conclude.0.start, format!("Expected by clause to have empty type, got {:?}", be.ty)));
             }
-            check_assertion(env, &ae, &be)?;
+            // Axioms can assert whatever they like
+            if env.kind != FuncKind::Axiom {
+                check_assertion(env, &ae, &be, conclude.0.start)?;
+            }
             Ok(env.closure(Typ::Empty, ExpBody::Conclude(Box::new(ae), Box::new(be))))
         }
         Expr::Mp(mp,_,a,_,b,_) => {
@@ -229,7 +291,7 @@ fn check_expr(env: &InnerEnv, main_expr:&Expr) -> Result<Exp,Error> {
             call(env, &f.string, &xs.iter().map(|a|&a.expr).collect::<Vec<_>>(), f.pos())
         }
         Expr::Var(x) => {
-            env.lookup(&x.string, x.pos())
+            env.lookup_expr(&x.string, x.pos())
         }
         Expr::Paren(_,x,_) => {
             check_expr(env,x)
@@ -245,11 +307,11 @@ fn check_expr(env: &InnerEnv, main_expr:&Expr) -> Result<Exp,Error> {
 
 fn call(env: &InnerEnv, f: &str, xs: &[&Expr], pos: PosFromEnd) -> Result<Exp,Error> {
     let rett;
-    let fe = env.lookup(f, pos)?;
+    let (ft,fe) = env.lookup_call_head(f, pos)?;
     let xes = xs.iter().map(|x|check_expr(env,x)).collect::<Result<Vec<_>,Error>>()?;
-    if let Typ::Func(ats, rt) = &fe.ty {
+    if let Typ::Func(ats, rt) = &ft {
         if ats.len() != xes.len() {
-            return Err(err(pos,format!("Expected function to be called with {} arguments, got {}", ats.len(), xes.len())));
+            return Err(err(pos,format!("Expected function {} to be called with {} arguments, got {}", f, ats.len(), xes.len())));
         }
         for i in 0..ats.len() {
             if xes[i].ty != ats[i] {
@@ -258,9 +320,9 @@ fn call(env: &InnerEnv, f: &str, xs: &[&Expr], pos: PosFromEnd) -> Result<Exp,Er
         }
         rett = *rt.clone();
     } else {
-        return Err(err(pos,format!("Item being called is not a function. Type is {:?}. Value is {}", fe.ty, f)));
+        return Err(err(pos,format!("Item being called is not a function. Type is {:?}. Value is {}", ft, f)));
     }
-    Ok(env.closure(rett, ExpBody::Call(Box::new(fe),xes)))
+    Ok(env.closure(rett, ExpBody::Call(fe,xes)))
 }
 
 fn create_outer_env() -> OuterEnv {
@@ -283,8 +345,9 @@ fn a2(a:bool, b:bool, c:bool) {
     let module = Module::parse(code).unwrap().1;
     let mut oenv = HashMap::new();
     for f in &module.funcs {
-        let (name,exp) = check_fn(&oenv, f, true).unwrap();
-        oenv.insert(name, exp);
+        let (name,ty,theorem) = check_fn(&oenv, f, true).unwrap();
+        println!("Added {} {:?}", name, ty);
+        oenv.insert(name, OEnvThing{ty,theorem});
     }
     oenv
 }
