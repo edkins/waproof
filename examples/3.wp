@@ -1,0 +1,43 @@
+nn ::= 32 | 64.
+mm ::= 32 | 64.
+sx ::= atoms(u | s).
+
+atoms(div, rem, shr, lt, gt, le, ge).
+
+iunop ::= atoms(clz | ctz | popcnt).
+ibinop ::= atoms(add | sub | mul | and | or | xor | shl | rotl | rotr) | div_sx | rem_sx | shr_sx.
+funop ::= atoms(abs | neg | sqrt | ceil | floor | trunc | nearest).
+fbinop ::= atoms(add | sub | mul | div | min | max | copysign).
+itestop ::= atoms(eqz).
+irelop ::= atoms(eq | ne) | lt_sx | gt_sx | le_sx | ge_sx.
+frelop ::= atoms(eq | ne | lt | gt | le | ge).
+
+atoms(i,f).
+atoms(sat).
+atoms(const,extend,wrap,trunc,demote,promote,convert,reinterpret).
+instr ::= i_nn.const constint(nn)
+	| f_nn.const constfloat(nn)
+	| i_nn.iunop
+	| f_nn.funop
+	| i_nn.ibinop
+	| f_nn.fbinop
+	| i_nn.itestop
+	| i_nn.irelop
+	| f_nn.frelop
+	| i_nn.extend_8_s
+	| i_nn.extend_16_s
+	| i_64.extend_32_s
+	| i_32.wrap_i_64
+	| i_64.extend_i32_sx
+	| i_nn.trunc_sat_f_mm_sx
+	| f_32.demote_f_64
+	| f_64.promote_f_32
+	| f_nn.convert_i_mm_sx
+	| i_nn.reinterpret_f_nn
+	| f_nn.reinterpret_i_nn.
+
+unop ::= iunop | funop | extend_N_s.
+binop ::= ibinop | fbinop.
+testop ::= itestop.
+relop ::= irelop | frelop.
+cvtop ::= wrap | extend | trunc | trunc_sat | convert | demote | promote | reinterpret.
