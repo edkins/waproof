@@ -183,3 +183,67 @@ impl From<Error> for std::io::Error {
         std::io::Error::new(std::io::ErrorKind::Other, e)
     }
 }
+
+#[derive(Clone)]
+pub struct Delimited<T,D>(pub Vec<(T,Option<D>)>);
+
+#[derive(Clone)]
+pub struct Delimited1<T,D>(pub Vec<(T,Option<D>)>);
+
+fn separated_rec<'a, T:Parse, D:Parse>(v: &mut Vec<(T,Option<D>)>, input: &'a str) -> IResult<&'a str, (), Error> {
+    let (input,x) = opt(pair(D::parse,T::parse))(input)?;
+    if let Some((d,t)) = x {
+        let i = v.len() - 1;
+        v[i].1 = Some(d);
+        v.push((t,None));
+        separated_rec(v,input)
+    } else {
+        Ok((input,()))
+    }
+}
+
+impl<T:Parse,D:Parse> Parse for Delimited<T,D> {
+    fn parse(input: &str) -> IResult<&str, Self, Error> {
+        let (input,x) = opt(T::parse)(input)?;
+        if let Some(t) = x {
+            let mut v = vec![(t,None)];
+            let (input,()) = separated_rec(&mut v, input)?;
+            Ok((input,Delimited(v)))
+        } else {
+            Ok((input,Delimited(vec![])))
+        }
+    }
+}
+
+impl<T:Parse,D:Parse> Parse for Delimited1<T,D> {
+    fn parse(input: &str) -> IResult<&str, Self, Error> {
+        let (input,t) = T::parse(input)?;
+        let mut v = vec![(t,None)];
+        let (input,()) = separated_rec(&mut v, input)?;
+        Ok((input,Delimited1(v)))
+    }
+}
+
+impl<T:fmt::Display,D:fmt::Display> fmt::Display for Delimited1<T,D> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (x,od) in &self.0 {
+            write!(f, "{}", x)?;
+            if let Some(o) = od {
+                write!(f, "{}", o)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<T:fmt::Display,D:fmt::Display> fmt::Display for Delimited<T,D> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (x,od) in &self.0 {
+            write!(f, "{}", x)?;
+            if let Some(o) = od {
+                write!(f, "{}", o)?;
+            }
+        }
+        Ok(())
+    }
+}
