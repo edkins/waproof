@@ -8,6 +8,7 @@ use crate::ast::Module;
 use lang_stuff::{Error,Parse};
 
 mod ast;
+mod semantics;
 
 fn parse(input: &str) -> std::io::Result<Module> {
     match Module::parse(input) {
@@ -25,8 +26,9 @@ fn main() -> std::io::Result<()> {
     let input = matches.value_of("INPUT").unwrap();
 
     let ast = parse(&fs::read_to_string(input)?)?;
+    let script = ast.to_script()?;
 
-    println!("{}", ast);
+    println!("{}", script);
 
     Ok(())
 }

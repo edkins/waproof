@@ -2,38 +2,38 @@ nn,mm ::= 32 | 64.
 sx ::= #u | #s.
 
 iunop ::= #clz | #ctz | #popcnt.
-ibinop ::= #add | #sub | #mul | #and | #or | #xor | #shl | #rotl | #rotr | (#div,sx) | (#rem,sx) | (#shr,sx).
+ibinop ::= #add | #sub | #mul | #and | #or | #xor | #shl | #rotl | #rotr | [#div,sx] | [#rem,sx] | [#shr,sx].
 funop ::= #abs | #neg | #sqrt | #ceil | #floor | #trunc | #nearest.
 fbinop ::= #add | #sub | #mul | #div | #min | #max | #copysign.
 itestop ::= #eqz.
-irelop ::= #eq | #ne | (#lt,sx) | (#gt,sx) | (#le,sx) | (#ge,sx).
+irelop ::= #eq | #ne | [#lt,sx] | [#gt,sx] | [#le,sx] | [#ge,sx].
 frelop ::= #eq | #ne | #lt | #gt | #le | #ge.
 
 i,f,sat ::= #.
 const,extend,wrap,trunc,demote,promote,convert,reinterpret ::= #.
 
-instr ::= (i,nn,const,constint(nn))
-	| (f,nn,const,constfloat(nn))
-	| (i,nn,iunop)
-	| (f,nn,funop)
-	| (i,nn,ibinop)
-	| (f,nn,fbinop)
-	| (i,nn,itestop)
-	| (i,nn,irelop)
-	| (f,nn,frelop)
-	| (i,nn,(extend,8,s))
-	| (i,nn,(extend,16,s))
-	| (i,64,(extend,32,s))
-	| (i,32,(wrap,i,64))
-	| (i,64,(extend,i32,sx))
-	| (i,nn,(trunc,sat,f,mm,sx))
-	| (f,32,(demote,f,64))
-	| (f,64,(promote,f,32))
-	| (f,nn,(convert,i,mm,sx))
-	| (i,nn,(reinterpret,f,nn))
-	| (f,nn,(reinterpret,i,nn)).
+instr ::= [i,nn,const,constint(nn)]
+	| [f,nn,const,constfloat(nn)]
+	| [i,nn,iunop]
+	| [f,nn,funop]
+	| [i,nn,ibinop]
+	| [f,nn,fbinop]
+	| [i,nn,itestop]
+	| [i,nn,irelop]
+	| [f,nn,frelop]
+	| [i,nn,[extend,8,s]]
+	| [i,nn,[extend,16,s]]
+	| [i,64,[extend,32,s]]
+	| [i,32,[wrap,i,64]]
+	| [i,64,[extend,i32,sx]]
+	| [i,nn,[trunc,sat,f,mm,sx]]
+	| [f,32,[demote,f,64]]
+	| [f,64,[promote,f,32]]
+	| [f,nn,[convert,i,mm,sx]]
+	| [i,nn,[reinterpret,f,nn]]
+	| [f,nn,[reinterpret,i,nn]].
 
-unop ::= iunop | funop | (extend,any,s).
+unop ::= iunop | funop | [extend,any,s].
 binop ::= ibinop | fbinop.
 testop ::= itestop.
 relop ::= irelop | frelop.

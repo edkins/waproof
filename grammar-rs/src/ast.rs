@@ -18,6 +18,14 @@ pub struct LParen(pub Span);
 pub struct RParen(pub Span);
 
 #[derive(Clone,Parse)]
+#[symbol("[")]
+pub struct LSquare(pub Span);
+
+#[derive(Clone,Parse)]
+#[symbol("]")]
+pub struct RSquare(pub Span);
+
+#[derive(Clone,Parse)]
 #[symbol(",")]
 pub struct Comma(pub Span);
 
@@ -35,7 +43,7 @@ pub enum Expr {
     Call(Word, LParen, Delimited<Expr,Comma>, RParen),
     Word(Word),
     HashWord(Hash, Word),
-    Tuple(LParen, Delimited<Expr,Comma>, RParen),
+    List(LSquare, Delimited<Expr,Comma>, RSquare),
 }
 
 #[derive(Clone,Parse)]
@@ -51,11 +59,11 @@ pub enum Statement {
 
 #[derive(Clone,ParseDisplay)]
 pub struct Module {
-    pub funcs: Vec<Statement>,
+    pub statements: Vec<Statement>,
 }
 
 impl Parse for Module {
     fn parse(input: &str) -> IResult<&str, Self, Error> {
-        map(all_consuming(terminated(Vec::<Statement>::parse, whitespace)), |funcs|Module{funcs})(input)
+        map(all_consuming(terminated(Vec::<Statement>::parse, whitespace)), |statements|Module{statements})(input)
     }
 }
