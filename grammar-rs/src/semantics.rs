@@ -19,9 +19,10 @@ pub struct Form {
 pub enum DefinitionStatus {
     Terminal,
     Nonterminal(Vec<Form>, Vec<Form>),
+    Builtin(Vec<Form>),
 }
 
-#[derive(Debug,Default)]
+#[derive(Debug)]
 pub struct Script(pub HashMap<String,DefinitionStatus>);
 
 #[derive(Debug)]
@@ -47,7 +48,20 @@ impl From<SemanticError> for std::io::Error {
     }
 }
 
+fn form(x: &str) -> Form {
+    Form{head: Label::Str(x.to_owned()), tail: vec![]}
+}
+
 impl Script {
+    fn new() -> Self {
+        let mut defs = HashMap::new();
+        defs.insert("any".to_owned(), DefinitionStatus::Builtin(vec![]));
+        defs.insert("nat".to_owned(), DefinitionStatus::Builtin(vec![]));
+        defs.insert("constint".to_owned(), DefinitionStatus::Builtin(vec![form("nat")]));
+        defs.insert("constfloat".to_owned(), DefinitionStatus::Builtin(vec![form("nat")]));
+        Self(defs)
+    }
+
     fn add_terminal(&mut self, word: String) -> Result<(),SemanticError> {
         match self.0.get(&word) {
             Some(DefinitionStatus::Terminal) => Ok(()),
@@ -118,7 +132,7 @@ impl Expr {
 
 impl Module {
     pub fn to_script(&self) -> Result<Script,SemanticError> {
-        let mut script = Script::default();
+        let mut script = Script::new();
         for statement in &self.statements {
             match &statement {
                 Statement::Expand(terms, _, def, _) => {
@@ -174,9 +188,19 @@ fn write_form_args(f: &mut std::fmt::Formatter, xs: &[Form]) -> std::fmt::Result
 
 impl std::fmt::Display for Form {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.head)?;
-        write_form_args(f, &self.tail)?;
-        Ok(())
+        match self.head {
+            Label::List => {
+                write!(f, "[")?;
+                write_separated_forms(f, &self.tail, ",")?;
+                write!(f, "]")?;
+                Ok(())
+            }
+            _ => {
+                write!(f, "{}", self.head)?;
+                write_form_args(f, &self.tail)?;
+                Ok(())
+            }
+        }
     }
 }
 
@@ -187,6 +211,11 @@ impl std::fmt::Display for Script {
         for key in keys {
             match self.0.get(key).unwrap() {
                 DefinitionStatus::Terminal => {write!(f, "{} ::= #.\n", key)?;}
+                DefinitionStatus::Builtin(left) => {
+                    write!(f, "{}", key)?;
+                    write_form_args(f, left)?;
+                    write!(f, " builtin.\n")?;
+                }
                 DefinitionStatus::Nonterminal(left,right) => {
                     write!(f, "{}", key)?;
                     write_form_args(f, left)?;

@@ -25,8 +25,8 @@ instr ::= [i,nn,const,constint(nn)]
 	| [i,nn,[extend,16,s]]
 	| [i,64,[extend,32,s]]
 	| [i,32,[wrap,i,64]]
-	| [i,64,[extend,i32,sx]]
-	| [i,nn,[trunc,sat,f,mm,sx]]
+	| [i,64,[extend,i,32,sx]]
+	| [i,nn,[[trunc,sat],f,mm,sx]]
 	| [f,32,[demote,f,64]]
 	| [f,64,[promote,f,32]]
 	| [f,nn,[convert,i,mm,sx]]
@@ -37,4 +37,4 @@ unop ::= iunop | funop | [extend,any,s].
 binop ::= ibinop | fbinop.
 testop ::= itestop.
 relop ::= irelop | frelop.
-cvtop ::= wrap | extend | trunc | trunc_sat | convert | demote | promote | reinterpret.
+cvtop ::= wrap | extend | trunc | [trunc,sat] | convert | demote | promote | reinterpret.
