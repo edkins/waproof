@@ -12,3 +12,4 @@ nom = "6.1"
 num-bigint = "0.3"
 lang-macros = {path = "../lang-macros"}
 lang-stuff = {path = "../lang-stuff"}
+rustyline = "7.1.0"

@@ -2,14 +2,14 @@ use num_bigint::BigUint;
 use std::collections::HashMap;
 use crate::ast::{Definition,Expr,Module,Statement};
 
-#[derive(Debug)]
+#[derive(Clone,Debug,PartialEq,Eq,Hash)]
 pub enum Label {
     Num(BigUint),
     Str(String),
     List,
 }
 
-#[derive(Debug)]
+#[derive(Clone,Debug,PartialEq,Eq,Hash)]
 pub struct Form {
     pub head: Label,
     pub tail: Vec<Form>,
@@ -29,8 +29,12 @@ pub struct Script(pub HashMap<String,DefinitionStatus>);
 pub enum SemanticError {
     Undefined(String),
     AlreadyDefined(String),
+    ArityMismatch(String,usize,usize),
     NotAWord(String),
     NotHeadTail(String),
+    NotTerminal(String),
+    NotAValue(String),
+    ScriptImmutable(String),
 }
 
 impl std::fmt::Display for SemanticError {
@@ -111,8 +115,18 @@ impl Expr {
             }
             Expr::Call(_,_,_,_) | Expr::Word(_) => {
                 let (head,tail) = self.to_head_tail(script)?;
-                if !script.0.contains_key(&head) {
-                    return Err(SemanticError::Undefined(head));
+                match script.0.get(&head) {
+                    Some(DefinitionStatus::Terminal) => {
+                        if !tail.is_empty() { 
+                            return Err(SemanticError::ArityMismatch(head,0,tail.len()));
+                        }
+                    }
+                    Some(DefinitionStatus::Nonterminal(left,_)) | Some(DefinitionStatus::Builtin(left)) => {
+                        if tail.len() != left.len() {
+                            return Err(SemanticError::ArityMismatch(head,left.len(),tail.len()));
+                        }
+                    }
+                    None => return Err(SemanticError::Undefined(head))
                 }
                 let head = Label::Str(head);
                 Ok(Form{ head, tail })
