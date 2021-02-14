@@ -1,17 +1,22 @@
-use quote::quote;
-use syn::{Data,DeriveInput,parse_macro_input};
+use proc_macro2::TokenStream;
+use quote::{format_ident,quote};
+use syn::{Data,DataEnum,DataStruct,DeriveInput,parse_macro_input};
 
 #[proc_macro_derive(PaLift)]
-pub fn derive_paify(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn derive_palift(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
-    let variants = match &input.data {
+    let variants;
+    let extra;
+    match &input.data {
         Data::Struct(structure) => {
-            vec![(name.clone(), structure.fields.clone())]
+            variants = vec![(name.clone(), structure.fields.clone())];
+            extra = derive_palift_struct(structure);
         }
         Data::Enum(enumeration) => {
-            enumeration.variants.iter().map(|variant|(variant.ident.clone(), variant.fields.clone())).collect()
+            variants = enumeration.variants.iter().map(|variant|(variant.ident.clone(), variant.fields.clone())).collect();
+            extra = derive_palift_enum(enumeration);
         }
         _ => panic!("Cannot handle untagged union")
     };
@@ -34,7 +39,37 @@ pub fn derive_paify(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                     #(#pa_variants,)*
                 ])
             }
+            #extra
         }
 
     }).into()
+}
+
+fn derive_palift_struct(structure: &DataStruct) -> TokenStream {
+    let pa_fields = structure.fields.iter().map(|field| {
+        let name = &field.ident;
+        quote!{self.#name.pa_lift()}
+    }).collect::<Vec<_>>();
+    quote! {
+        fn pa_lift(&self) -> subset_stuff::PaValue {
+            subset_stuff::PaValue::Variant(Self::pa_type(), 0, vec![#(#pa_fields,)*])
+        }
+    }
+}
+
+fn derive_palift_enum(enumeration: &DataEnum) -> TokenStream {
+    let branches = enumeration.variants.iter().enumerate().map(|(i,variant)| {
+        let name = &variant.ident;
+        let fields = (0..variant.fields.len()).map(|j|format_ident!("f{}",j)).collect::<Vec<_>>();
+        quote!{
+            Self::#name(#(#fields,)*) => subset_stuff::PaValue::Variant(Self::pa_type(),#i,vec![#(#fields.pa_lift(),)*]),
+        }
+    }).collect::<Vec<_>>();
+    quote! {
+        fn pa_lift(&self) -> subset_stuff::PaValue {
+            match self {
+                #(#branches)*
+            }
+        }
+    }
 }

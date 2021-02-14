@@ -4,10 +4,11 @@ extern crate subset_macros;
 use subset_stuff::PaLift;
 
 #[derive(PaLift)]
-struct Foo {
-    bar: bool,
+enum Foo {
+    Bar(bool),
+    Baz(bool,bool),
 }
 
 fn main() {
-    println!("Hello, world! {:?}", Foo::pa_type());
+    println!("{:?}", Foo::Bar(true).pa_lift());
 }
