@@ -1,14 +1,8 @@
-#[macro_use]
-extern crate subset_macros;
-
-use subset_stuff::PaLift;
-
-#[derive(PaLift)]
-enum Foo {
-    Bar(bool),
-    Baz(bool,bool),
-}
+mod standard;
+mod valid;
 
 fn main() {
-    println!("{:?}", Foo::Bar(true).pa_lift());
+    let ctx = standard::std_context();
+    println!("{:?}", ctx.nat("BigUint",42u8.into()));
+    println!("{:?}", ctx.structure("()", &[]));
 }

@@ -67,6 +67,7 @@ dependencies = [
 name = "subset-main"
 version = "0.1.0"
 dependencies = [
+ "num-bigint",
  "subset-macros",
  "subset-stuff",
 ]
