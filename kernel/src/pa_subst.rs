@@ -1,4 +1,4 @@
-use crate::pa_formula::{Expr,ExprVars,Formula,FormulaVars,SyntaxError};
+use crate::pa_formula::{Expr, ExprVars, Formula, FormulaVars, SyntaxError};
 
 impl Expr {
     fn subst(&self, x: &str, value: &ExprVars) -> ExprVars {
@@ -24,22 +24,22 @@ impl Formula {
             Formula::False => FormulaVars::falsehood(),
             Formula::Eq(a, b) => a.subst(x, value).eq(b.subst(x, value)),
             Formula::Imp(p, q) => p.subst(x, value).imp(q.subst(x, value)).unwrap(),
-            Formula::ForAll(y, p) => p.subst(x,value).forall(&y).unwrap(),
-            Formula::Memo(m) => m.clone().subst(x, value).unwrap().memo()
+            Formula::ForAll(y, p) => p.subst(x, value).forall(&y).unwrap(),
+            Formula::Memo(m) => m.clone().subst(x, value).unwrap().memo(),
         }
     }
 }
 
 impl FormulaVars {
     pub fn has_bound(&self, x: &str) -> bool {
-        self.bound().iter().any(|y|y==x)
+        self.bound().iter().any(|y| y == x)
     }
 
     pub fn has_free(&self, x: &str) -> bool {
-        self.free().iter().any(|y|y==x)
+        self.free().iter().any(|y| y == x)
     }
 
-    pub fn subst(self, x: &str, value: &ExprVars) -> Result<FormulaVars,SyntaxError> {
+    pub fn subst(self, x: &str, value: &ExprVars) -> Result<FormulaVars, SyntaxError> {
         if self.has_bound(x) {
             Err(SyntaxError::SubstBoundVar(x.to_owned()))
         } else if self.has_free(x) {
@@ -102,7 +102,10 @@ mod tests {
 
     #[test]
     fn simple_formula_subst_forall() {
-        let f = ExprVars::var("x").eq(ExprVars::var("y")).forall("y").unwrap();
+        let f = ExprVars::var("x")
+            .eq(ExprVars::var("y"))
+            .forall("y")
+            .unwrap();
         let g = f.subst("x", &ExprVars::z()).unwrap();
         let expected = ExprVars::z().eq(ExprVars::var("y")).forall("y").unwrap();
         assert_eq!(expected, g);
@@ -110,10 +113,11 @@ mod tests {
 
     #[test]
     fn simple_formula_subst_forall_invalid() {
-        let f = ExprVars::var("x").eq(ExprVars::var("y")).forall("x").unwrap();
+        let f = ExprVars::var("x")
+            .eq(ExprVars::var("y"))
+            .forall("x")
+            .unwrap();
         let g = f.subst("x", &ExprVars::z());
         assert!(g.is_err());
     }
-
 }
-

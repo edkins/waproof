@@ -1,4 +1,4 @@
-mod pa_axiom;
+pub mod pa_axiom;
 mod pa_convenience;
 mod pa_formula;
 mod pa_parse;

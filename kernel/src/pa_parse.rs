@@ -1,12 +1,12 @@
-use crate::pa_formula::{ExprVars,FormulaVars,SyntaxError};
 use crate::pa_convenience::num;
-use nom::IResult;
+use crate::pa_formula::{ExprVars, FormulaVars, SyntaxError};
 use nom::branch::alt;
-use nom::bytes::complete::{tag,take_while};
-use nom::character::complete::{digit1,multispace0,satisfy};
-use nom::combinator::{all_consuming,map,opt,recognize,value};
+use nom::bytes::complete::{tag, take_while};
+use nom::character::complete::{digit1, multispace0, satisfy};
+use nom::combinator::{all_consuming, opt, recognize, value};
 use nom::error::ErrorKind;
-use nom::sequence::{delimited,pair,preceded,terminated};
+use nom::sequence::{delimited, pair, preceded, terminated};
+use nom::IResult;
 use std::str::FromStr;
 
 #[derive(Debug)]
@@ -22,7 +22,7 @@ impl nom::error::ParseError<&str> for ParseError {
     fn from_error_kind(input: &str, kind: ErrorKind) -> Self {
         ParseError::Nom(kind, input.len())
     }
-    fn append(input: &str, kind: ErrorKind, mut other: Self) -> Self {
+    fn append(_input: &str, _kind: ErrorKind, other: Self) -> Self {
         other
     }
 }
@@ -62,7 +62,7 @@ fn parse_sym(sym: &'static str) -> impl Fn(&str) -> IResult<&str, (), ParseError
     move |input| {
         let (input, _) = multispace0(input)?;
         let (input, _) = tag(sym)(input)?;
-        Ok((input,()))
+        Ok((input, ()))
     }
 }
 
@@ -71,7 +71,7 @@ fn parse_keyword(sym: &'static str) -> impl Fn(&str) -> IResult<&str, (), ParseE
         let (input, _) = multispace0(input)?;
         let (input, _) = tag(sym)(input)?;
         let (input, _) = not_at_alphanum(input)?;
-        Ok((input,()))
+        Ok((input, ()))
     }
 }
 
@@ -90,7 +90,9 @@ fn parse_number(input: &str) -> IResult<&str, ExprVars, ParseError> {
     let (input, _) = multispace0(input)?;
     let (input, number) = digit1(input)?;
     let (input, _) = not_at_alphanum(input)?;
-    let n = number.parse().map_err(|_|nom::Err::Error(ParseError::NumberTooBig))?;
+    let n = number
+        .parse()
+        .map_err(|_| nom::Err::Error(ParseError::NumberTooBig))?;
     Ok((input, num(n)))
 }
 
@@ -107,12 +109,7 @@ fn parse_paren(input: &str) -> IResult<&str, ExprVars, ParseError> {
 }
 
 fn parse_term(input: &str) -> IResult<&str, ExprVars, ParseError> {
-    alt((
-            parse_paren,
-            parse_s,
-            parse_number,
-            parse_var,
-    ))(input)
+    alt((parse_paren, parse_s, parse_number, parse_var))(input)
 }
 
 fn parse_muls(input: &str) -> IResult<&str, ExprVars, ParseError> {
@@ -122,24 +119,26 @@ fn parse_muls(input: &str) -> IResult<&str, ExprVars, ParseError> {
         None => a,
         Some(b) => a.mul(b),
     };
-    Ok((input,r))
+    Ok((input, r))
 }
 
 fn parse_expr(input: &str) -> IResult<&str, ExprVars, ParseError> {
-    let (input, a) = parse_term(input)?;
+    let (input, a) = parse_muls(input)?;
     let (input, mb) = opt(preceded(parse_sym("+"), parse_expr))(input)?;
     let r = match mb {
         None => a,
         Some(b) => a.add(b),
     };
-    Ok((input,r))
+    Ok((input, r))
 }
 
 impl FromStr for ExprVars {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(terminated(all_consuming(parse_expr), multispace0)(s).map_err(extract_parse_error)?.1)
+        Ok(terminated(all_consuming(parse_expr), multispace0)(s)
+            .map_err(extract_parse_error)?
+            .1)
     }
 }
 
@@ -178,7 +177,14 @@ fn parse_exists(input: &str) -> IResult<&str, FormulaVars, ParseError> {
 }
 
 fn parse_tight(input: &str) -> IResult<&str, FormulaVars, ParseError> {
-    alt((parse_paren_formula, parse_forall, parse_exists, parse_not, parse_eq))(input)
+    alt((
+        parse_paren_formula,
+        parse_false,
+        parse_forall,
+        parse_exists,
+        parse_not,
+        parse_eq,
+    ))(input)
 }
 
 fn parse_imps(input: &str) -> IResult<&str, FormulaVars, ParseError> {
@@ -188,7 +194,7 @@ fn parse_imps(input: &str) -> IResult<&str, FormulaVars, ParseError> {
         None => a,
         Some(b) => a.imp(b).map_err(syn)?,
     };
-    Ok((input,r))
+    Ok((input, r))
 }
 
 fn parse_ands(input: &str) -> IResult<&str, FormulaVars, ParseError> {
@@ -198,7 +204,7 @@ fn parse_ands(input: &str) -> IResult<&str, FormulaVars, ParseError> {
         None => a,
         Some(b) => a.and(b).map_err(syn)?,
     };
-    Ok((input,r))
+    Ok((input, r))
 }
 
 fn parse_formula(input: &str) -> IResult<&str, FormulaVars, ParseError> {
@@ -208,14 +214,15 @@ fn parse_formula(input: &str) -> IResult<&str, FormulaVars, ParseError> {
         None => a,
         Some(b) => a.or(b).map_err(syn)?,
     };
-    Ok((input,r))
+    Ok((input, r))
 }
 
 impl FromStr for FormulaVars {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(terminated(all_consuming(parse_formula), multispace0)(s).map_err(extract_parse_error)?.1)
+        Ok(terminated(all_consuming(parse_formula), multispace0)(s)
+            .map_err(extract_parse_error)?
+            .1)
     }
 }
-
