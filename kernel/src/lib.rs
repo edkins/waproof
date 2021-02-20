@@ -1,3 +1,5 @@
+mod pa_convenience;
+mod pa_formula;
 mod wa_binary;
 mod wa_type;
 pub mod wa_valid;

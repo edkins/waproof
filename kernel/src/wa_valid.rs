@@ -4,19 +4,19 @@ use crate::wa_type::{func0, func2, BlockType, FuncType, LocalIdx, ValType};
 #[derive(Debug)]
 pub enum PreconditionNotMet {
     ContextMismatch,
-    OutOfBounds(u32,u32),
-    TypeCountMismatch(u32,u32),
+    OutOfBounds(u32, u32),
+    TypeCountMismatch(u32, u32),
     WrongValType(ValType, ValType),
 }
 
-#[derive(Clone,Debug,PartialEq,Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Vec32<T>(pub Vec<T>);
 
 impl<T> Vec32<T> {
     pub fn len(&self) -> u32 {
         self.0.len() as u32
     }
-    pub fn get_ref(&self, i: u32) -> Result<&T,PreconditionNotMet> {
+    pub fn get_ref(&self, i: u32) -> Result<&T, PreconditionNotMet> {
         if i < self.len() {
             Ok(&self.0[i as usize])
         } else {
@@ -24,12 +24,12 @@ impl<T> Vec32<T> {
         }
     }
 }
-impl<T:Copy> Vec32<T> {
-    pub fn get(&self, i: u32) -> Result<T,PreconditionNotMet> {
+impl<T: Copy> Vec32<T> {
+    pub fn get(&self, i: u32) -> Result<T, PreconditionNotMet> {
         Ok(*self.get_ref(i)?)
     }
 }
-impl<T:Clone> Vec32<T> {
+impl<T: Clone> Vec32<T> {
     pub fn prepend(&self, extra: &[T]) -> Self {
         let mut vec = extra.to_vec();
         vec.extend_from_slice(&self.0);
@@ -37,7 +37,7 @@ impl<T:Clone> Vec32<T> {
     }
 }
 
-#[derive(Clone,Debug,PartialEq,Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Context {
     types: Vec32<FuncType>,
     locals: Vec32<ValType>,
@@ -53,7 +53,10 @@ pub struct TypeJudgement {
 
 fn check_valtypes_equal(a: &[ValType], b: &[ValType]) -> Result<(), PreconditionNotMet> {
     if a.len() != b.len() {
-        return Err(PreconditionNotMet::TypeCountMismatch(a.len() as u32, b.len() as u32));
+        return Err(PreconditionNotMet::TypeCountMismatch(
+            a.len() as u32,
+            b.len() as u32,
+        ));
     }
     for i in 0..a.len() {
         if a[i] != b[i] {
@@ -73,7 +76,12 @@ impl Context {
     }
 
     // https://webassembly.github.io/spec/core/valid/types.html#valid-blocktype
-    fn check_blocktype(&self, blocktype: &BlockType, t1: &[ValType], t2: &[ValType]) -> Result<(), PreconditionNotMet> {
+    fn check_blocktype(
+        &self,
+        blocktype: &BlockType,
+        t1: &[ValType],
+        t2: &[ValType],
+    ) -> Result<(), PreconditionNotMet> {
         match blocktype {
             BlockType::Empty => {
                 check_valtypes_equal(t1, &[])?;
@@ -121,7 +129,11 @@ impl Context {
     }
 
     // https://webassembly.github.io/spec/core/valid/instructions.html#control-instructions
-    pub fn block(&self, blocktype: BlockType, j: &TypeJudgement) -> Result<TypeJudgement, PreconditionNotMet> {
+    pub fn block(
+        &self,
+        blocktype: BlockType,
+        j: &TypeJudgement,
+    ) -> Result<TypeJudgement, PreconditionNotMet> {
         let t1 = &j.t.params;
         let t2 = &j.t.result;
         self.check_blocktype(&blocktype, t1, t2)?;
@@ -132,7 +144,7 @@ impl Context {
         Ok(TypeJudgement {
             c: self.clone(),
             a: wa_binary::block_end(&blocktype, &j.a),
-            t: j.t.clone()
+            t: j.t.clone(),
         })
     }
 }
