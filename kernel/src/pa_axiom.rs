@@ -35,6 +35,7 @@ impl FormulaVars {
     }
 }
 
+// FOL Axioms
 impl Theorem {
     pub fn formula(&self) -> &FormulaVars {
         &self.f
@@ -108,6 +109,197 @@ impl Theorem {
         } else {
             Err(TheoremError::NotImp)
         }
+    }
+}
+
+// PA Axioms
+impl Theorem {
+    pub fn ae1() -> Theorem {
+        let f = ExprVars::var("x")
+            .eq(ExprVars::var("x"))
+            .forall("x")
+            .unwrap();
+        Theorem { f }
+    }
+
+    pub fn ae2() -> Theorem {
+        let f = ExprVars::var("x")
+            .eq(ExprVars::var("y"))
+            .imp(ExprVars::var("y").eq(ExprVars::var("x")))
+            .unwrap()
+            .forall("y")
+            .unwrap()
+            .forall("x")
+            .unwrap();
+        Theorem { f }
+    }
+
+    pub fn ae3() -> Theorem {
+        let f = ExprVars::var("x")
+            .eq(ExprVars::var("y"))
+            .imp(
+                ExprVars::var("y")
+                    .eq(ExprVars::var("z"))
+                    .imp(ExprVars::var("x").eq(ExprVars::var("z")))
+                    .unwrap(),
+            )
+            .unwrap()
+            .forall("z")
+            .unwrap()
+            .forall("y")
+            .unwrap()
+            .forall("x")
+            .unwrap();
+        Theorem { f }
+    }
+
+    pub fn aes() -> Theorem {
+        let f = ExprVars::var("x")
+            .eq(ExprVars::var("y"))
+            .imp(ExprVars::var("x").s().eq(ExprVars::var("y").s()))
+            .unwrap()
+            .forall("y")
+            .unwrap()
+            .forall("x")
+            .unwrap();
+        Theorem { f }
+    }
+
+    pub fn aea1() -> Theorem {
+        let f = ExprVars::var("x")
+            .eq(ExprVars::var("y"))
+            .imp(
+                ExprVars::var("x")
+                    .add(ExprVars::var("z"))
+                    .eq(ExprVars::var("y").add(ExprVars::var("z"))),
+            )
+            .unwrap()
+            .forall("z")
+            .unwrap()
+            .forall("y")
+            .unwrap()
+            .forall("x")
+            .unwrap();
+        Theorem { f }
+    }
+
+    pub fn aea2() -> Theorem {
+        let f = ExprVars::var("y")
+            .eq(ExprVars::var("z"))
+            .imp(
+                ExprVars::var("x")
+                    .add(ExprVars::var("y"))
+                    .eq(ExprVars::var("x").add(ExprVars::var("z"))),
+            )
+            .unwrap()
+            .forall("z")
+            .unwrap()
+            .forall("y")
+            .unwrap()
+            .forall("x")
+            .unwrap();
+        Theorem { f }
+    }
+
+    pub fn aem1() -> Theorem {
+        let f = ExprVars::var("x")
+            .eq(ExprVars::var("y"))
+            .imp(
+                ExprVars::var("x")
+                    .mul(ExprVars::var("z"))
+                    .eq(ExprVars::var("y").mul(ExprVars::var("z"))),
+            )
+            .unwrap()
+            .forall("z")
+            .unwrap()
+            .forall("y")
+            .unwrap()
+            .forall("x")
+            .unwrap();
+        Theorem { f }
+    }
+
+    pub fn aem2() -> Theorem {
+        let f = ExprVars::var("y")
+            .eq(ExprVars::var("z"))
+            .imp(
+                ExprVars::var("x")
+                    .mul(ExprVars::var("y"))
+                    .eq(ExprVars::var("x").mul(ExprVars::var("z"))),
+            )
+            .unwrap()
+            .forall("z")
+            .unwrap()
+            .forall("y")
+            .unwrap()
+            .forall("x")
+            .unwrap();
+        Theorem { f }
+    }
+
+    pub fn as1() -> Theorem {
+        let f = ExprVars::z()
+            .eq(ExprVars::var("x").s())
+            .imp(FormulaVars::falsehood())
+            .unwrap()
+            .forall("x")
+            .unwrap();
+        Theorem { f }
+    }
+
+    pub fn as2() -> Theorem {
+        let f = ExprVars::var("x")
+            .s()
+            .eq(ExprVars::var("y").s())
+            .imp(ExprVars::var("x").eq(ExprVars::var("y")))
+            .unwrap()
+            .forall("y")
+            .unwrap()
+            .forall("x")
+            .unwrap();
+        Theorem { f }
+    }
+
+    pub fn aa1() -> Theorem {
+        let f = ExprVars::var("x")
+            .add(ExprVars::z())
+            .eq(ExprVars::var("x"))
+            .forall("x")
+            .unwrap();
+        Theorem { f }
+    }
+
+    pub fn aa2() -> Theorem {
+        let f = ExprVars::var("x")
+            .add(ExprVars::var("y").s())
+            .eq(ExprVars::var("x").add(ExprVars::var("y")).s())
+            .forall("y")
+            .unwrap()
+            .forall("x")
+            .unwrap();
+        Theorem { f }
+    }
+
+    pub fn am1() -> Theorem {
+        let f = ExprVars::var("x")
+            .mul(ExprVars::z())
+            .eq(ExprVars::z())
+            .forall("x")
+            .unwrap();
+        Theorem { f }
+    }
+
+    pub fn am2() -> Theorem {
+        let f = ExprVars::var("x")
+            .mul(ExprVars::var("y").s())
+            .eq(ExprVars::var("x")
+                .mul(ExprVars::var("y"))
+                .add(ExprVars::var("x")))
+            .forall("y")
+            .unwrap()
+            .forall("x")
+            .unwrap();
+        Theorem { f }
     }
 }
 
@@ -251,5 +443,103 @@ mod test {
         let a = Theorem::a1(one_eq_0(), two_eq_0(), &[]).unwrap();
         let b = Theorem::a2(two_eq_0(), two_eq_0(), one_eq_0(), &[]).unwrap();
         assert!(b.mp(a).is_err());
+    }
+
+    #[test]
+    fn ae1() {
+        let t = Theorem::ae1();
+        let e: FormulaVars = "@x(x = x)".parse().unwrap();
+        assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn ae2() {
+        let t = Theorem::ae2();
+        let e: FormulaVars = "@x(@y(x = y -> y = x))".parse().unwrap();
+        assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn ae3() {
+        let t = Theorem::ae3();
+        let e: FormulaVars = "@x(@y(@z(x = y -> y = z -> x = z)))".parse().unwrap();
+        assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn aes() {
+        let t = Theorem::aes();
+        let e: FormulaVars = "@x(@y(x = y -> S(x) = S(y)))".parse().unwrap();
+        assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn aea1() {
+        let t = Theorem::aea1();
+        let e: FormulaVars = "@x(@y(@z(x = y -> x + z = y + z)))".parse().unwrap();
+        assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn aea2() {
+        let t = Theorem::aea2();
+        let e: FormulaVars = "@x(@y(@z(y = z -> x + y = x + z)))".parse().unwrap();
+        assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn aem1() {
+        let t = Theorem::aem1();
+        let e: FormulaVars = "@x(@y(@z(x = y -> x * z = y * z)))".parse().unwrap();
+        assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn aem2() {
+        let t = Theorem::aem2();
+        let e: FormulaVars = "@x(@y(@z(y = z -> x * y = x * z)))".parse().unwrap();
+        assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn as1() {
+        let t = Theorem::as1();
+        let e: FormulaVars = "@x(!(0 = S(x)))".parse().unwrap();
+        assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn as2() {
+        let t = Theorem::as2();
+        let e: FormulaVars = "@x(@y(S(x) = S(y) -> x = y))".parse().unwrap();
+        assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn aa1() {
+        let t = Theorem::aa1();
+        let e: FormulaVars = "@x(x + 0 = x)".parse().unwrap();
+        assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn aa2() {
+        let t = Theorem::aa2();
+        let e: FormulaVars = "@x(@y(x + S(y) = S(x + y)))".parse().unwrap();
+        assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn am1() {
+        let t = Theorem::am1();
+        let e: FormulaVars = "@x(x * 0 = 0)".parse().unwrap();
+        assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn am2() {
+        let t = Theorem::am2();
+        let e: FormulaVars = "@x(@y(x * S(y) = x * y + x))".parse().unwrap();
+        assert_eq!(e, t.f);
     }
 }
