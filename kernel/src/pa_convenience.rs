@@ -26,7 +26,7 @@ impl Formula {
             Formula::Eq(a, b) => a.reconstitute().eq(b.reconstitute()),
             Formula::Imp(p, q) => p.reconstitute()?.imp(q.reconstitute()?)?,
             Formula::ForAll(x, p) => p.reconstitute()?.forall(&x)?,
-            Formula::Memo(m) => m.clone(),
+            Formula::Memo(m) => m.clone().memo(),
         })
     }
 }

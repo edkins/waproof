@@ -4,6 +4,7 @@ use std::rc::Rc;
 pub enum SyntaxError {
     MixingFreeAndBound(String),
     BoundTwice(String),
+    SubstBoundVar(String),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -170,3 +171,26 @@ impl FormulaVars {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ExprVars;
+
+    #[test]
+    fn forall_different_vars_ok() {
+        let _ = ExprVars::var("x").eq(ExprVars::var("y")).forall("x").unwrap().forall("y").unwrap();
+    }
+
+    #[test]
+    fn forall_same_var_not_ok() {
+        assert!(ExprVars::var("x").eq(ExprVars::var("y")).forall("x").unwrap().forall("x").is_err());
+    }
+
+    #[test]
+    fn mixing_bound_unbound_not_ok() {
+        let f = ExprVars::var("x").eq(ExprVars::var("x")).forall("x").unwrap();
+        let g = ExprVars::var("x").eq(ExprVars::var("x"));
+        assert!(f.imp(g).is_err());
+    }
+}
+
