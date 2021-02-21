@@ -301,6 +301,19 @@ impl Theorem {
             .unwrap();
         Theorem { f }
     }
+
+    pub fn aind(a: FormulaVars, x: &str, gen: &[&str]) -> Result<Theorem, TheoremError> {
+        if a.has_bound(x) {
+            return Err(TheoremError::BoundTwice(x.to_owned()));
+        }
+        let a0 = a.clone().subst(x, &ExprVars::z())?;
+        let ax = a.clone();
+        let asx = a.clone().subst(x, &ExprVars::var(x).s())?;
+        let f = a0
+            .imp(ax.imp(asx)?.forall(x)?.imp(a.forall(x)?)?)?
+            .generalize(gen)?;
+        Ok(Theorem { f })
+    }
 }
 
 #[cfg(test)]
@@ -541,5 +554,24 @@ mod test {
         let t = Theorem::am2();
         let e: FormulaVars = "@x(@y(x * S(y) = x * y + x))".parse().unwrap();
         assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn aind_xy() {
+        let t = Theorem::aind(x_eq_y(), "x", &["y"]).unwrap();
+        let e: FormulaVars = "@y(0=y -> @x(x = y -> S(x) = y) -> @x(x = y))"
+            .parse()
+            .unwrap();
+        assert_eq!(e, t.f);
+    }
+
+    #[test]
+    fn aind_zz_fail() {
+        assert!(Theorem::aind(z_eq_0(), "z", &["z"]).is_err());
+    }
+
+    #[test]
+    fn aind_bound_fail() {
+        assert!(Theorem::aind(z_eq_0().forall("z").unwrap(), "z", &[]).is_err());
     }
 }
