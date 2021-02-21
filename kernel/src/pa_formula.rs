@@ -7,7 +7,7 @@ pub enum SyntaxError {
     SubstBoundVar(String),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Expr {
     Var(String),
     Z,
@@ -16,13 +16,37 @@ pub enum Expr {
     Mul(Rc<Expr>, Rc<Expr>),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+impl std::fmt::Debug for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Expr::Var(x) => write!(f, "{}", x),
+            Expr::Z => write!(f, "0"),
+            Expr::S(e) => write!(f, "S({:?})", e),
+            Expr::Add(a,b) => write!(f, "({:?}+{:?})", a, b),
+            Expr::Mul(a,b) => write!(f, "({:?}+{:?})", a, b),
+        }
+    }
+}
+
+#[derive(Clone, Eq, PartialEq)]
 pub enum Formula {
     False,
     Eq(Rc<Expr>, Rc<Expr>),
     Imp(Rc<Formula>, Rc<Formula>),
     ForAll(String, Rc<Formula>),
     Memo(FormulaVars),
+}
+
+impl std::fmt::Debug for Formula {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Formula::False => write!(f, "false"),
+            Formula::Eq(a,b) => write!(f, "({:?}={:?})", a, b),
+            Formula::Imp(a,b) => write!(f, "({:?} -> {:?})", a, b),
+            Formula::ForAll(x,a) => write!(f, "@{}({:?})", x, a),
+            Formula::Memo(fv) => write!(f, "{:?}", fv),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

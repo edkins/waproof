@@ -23,7 +23,7 @@ impl From<SyntaxError> for TheoremError {
 }
 
 impl FormulaVars {
-    fn generalize(mut self, gen: &[&str]) -> Result<Self, TheoremError> {
+    fn generalize(mut self, gen: &[String]) -> Result<Self, TheoremError> {
         for var in gen {
             self = self.forall(var)?;
         }
@@ -41,7 +41,7 @@ impl Theorem {
         &self.f
     }
 
-    pub fn a1(a: FormulaVars, b: FormulaVars, gen: &[&str]) -> Result<Self, TheoremError> {
+    pub fn a1(a: FormulaVars, b: FormulaVars, gen: &[String]) -> Result<Self, TheoremError> {
         let f = a.clone().imp(b.imp(a)?)?.generalize(gen)?;
         Ok(Theorem { f })
     }
@@ -50,7 +50,7 @@ impl Theorem {
         a: FormulaVars,
         b: FormulaVars,
         c: FormulaVars,
-        gen: &[&str],
+        gen: &[String],
     ) -> Result<Self, TheoremError> {
         let abc = a.clone().imp(b.clone().imp(c.clone())?)?;
         let abac = a.clone().imp(b)?.imp(a.imp(c)?)?;
@@ -58,7 +58,7 @@ impl Theorem {
         Ok(Theorem { f })
     }
 
-    pub fn a3(a: FormulaVars, gen: &[&str]) -> Result<Self, TheoremError> {
+    pub fn a3(a: FormulaVars, gen: &[String]) -> Result<Self, TheoremError> {
         let f = a
             .clone()
             .imp(FormulaVars::falsehood())?
@@ -68,7 +68,7 @@ impl Theorem {
         Ok(Theorem { f })
     }
 
-    pub fn a4(a: FormulaVars, b: FormulaVars, x: &str, gen: &[&str]) -> Result<Self, TheoremError> {
+    pub fn a4(a: FormulaVars, b: FormulaVars, x: &str, gen: &[String]) -> Result<Self, TheoremError> {
         if a.has_bound(x) || b.has_bound(x) {
             return Err(TheoremError::BoundTwice(x.to_owned()));
         }
@@ -79,7 +79,7 @@ impl Theorem {
         Ok(Theorem { f })
     }
 
-    pub fn a5(a: FormulaVars, x: &str, gen: &[&str]) -> Result<Self, TheoremError> {
+    pub fn a5(a: FormulaVars, x: &str, gen: &[String]) -> Result<Self, TheoremError> {
         if a.has_free(x) {
             return Err(TheoremError::MixingFreeAndBound(x.to_owned()));
         }
@@ -90,7 +90,7 @@ impl Theorem {
         Ok(Theorem { f })
     }
 
-    pub fn a6(a: FormulaVars, x: &str, e: ExprVars, gen: &[&str]) -> Result<Self, TheoremError> {
+    pub fn a6(a: FormulaVars, x: &str, e: ExprVars, gen: &[String]) -> Result<Self, TheoremError> {
         if a.has_bound(x) {
             return Err(TheoremError::SubstBoundVar(x.to_owned()));
         }
@@ -104,6 +104,7 @@ impl Theorem {
                 let f = b.reconstitute()?;
                 Ok(Theorem { f })
             } else {
+                //panic!();   // helps if you want a stack trace
                 Err(TheoremError::WrongHyp)
             }
         } else {
@@ -302,7 +303,7 @@ impl Theorem {
         Theorem { f }
     }
 
-    pub fn aind(a: FormulaVars, x: &str, gen: &[&str]) -> Result<Theorem, TheoremError> {
+    pub fn aind(a: FormulaVars, x: &str, gen: &[String]) -> Result<Theorem, TheoremError> {
         if a.has_bound(x) {
             return Err(TheoremError::BoundTwice(x.to_owned()));
         }
@@ -321,6 +322,10 @@ mod test {
     use super::Theorem;
     use crate::pa_convenience::num;
     use crate::pa_formula::{ExprVars, FormulaVars};
+
+    fn v(xs: &[&str]) -> Vec<String> {
+        xs.iter().map(|x|(*x).to_owned()).collect()
+    }
 
     fn x_eq_y() -> FormulaVars {
         ExprVars::var("x").eq(ExprVars::var("y"))
@@ -344,31 +349,31 @@ mod test {
 
     #[test]
     fn a1_xy() {
-        let t = Theorem::a1(x_eq_y(), y_eq_x(), &["x", "y"]).unwrap();
+        let t = Theorem::a1(x_eq_y(), y_eq_x(), &v(&["x", "y"])).unwrap();
         let expected: FormulaVars = "@y(@x(x = y -> y = x -> x = y))".parse().unwrap();
         assert_eq!(expected, t.f);
     }
 
     #[test]
     fn a1_xy_overgen() {
-        let t = Theorem::a1(x_eq_y(), y_eq_x(), &["x", "y", "z"]).unwrap();
+        let t = Theorem::a1(x_eq_y(), y_eq_x(), &v(&["x", "y", "z"])).unwrap();
         let expected: FormulaVars = "@z(@y(@x(x = y -> y = x -> x = y)))".parse().unwrap();
         assert_eq!(expected, t.f);
     }
 
     #[test]
     fn a1_xx_fails() {
-        assert!(Theorem::a1(x_eq_y(), y_eq_x(), &["x", "x"]).is_err());
+        assert!(Theorem::a1(x_eq_y(), y_eq_x(), &v(&["x", "x"])).is_err());
     }
 
     #[test]
     fn a1_free_var_fails() {
-        assert!(Theorem::a1(x_eq_y(), y_eq_x(), &["x"]).is_err());
+        assert!(Theorem::a1(x_eq_y(), y_eq_x(), &v(&["x"])).is_err());
     }
 
     #[test]
     fn a2_xyz() {
-        let t = Theorem::a2(x_eq_y(), y_eq_x(), z_eq_0(), &["x", "y", "z"]).unwrap();
+        let t = Theorem::a2(x_eq_y(), y_eq_x(), z_eq_0(), &v(&["x", "y", "z"])).unwrap();
         let expected: FormulaVars =
             "@z(@y(@x((x=y -> y=x -> z=0) -> (x=y -> y=x) -> (x=y -> z=0))))"
                 .parse()
@@ -378,21 +383,21 @@ mod test {
 
     #[test]
     fn a3_xy() {
-        let t = Theorem::a3(x_eq_y(), &["x", "y"]).unwrap();
+        let t = Theorem::a3(x_eq_y(), &v(&["x", "y"])).unwrap();
         let e: FormulaVars = "@y(@x(!!(x=y) -> x=y))".parse().unwrap();
         assert_eq!(e, t.f);
     }
 
     #[test]
     fn a4_xy() {
-        let t = Theorem::a4(x_eq_y(), y_eq_x(), "x", &["y"]).unwrap();
+        let t = Theorem::a4(x_eq_y(), y_eq_x(), "x", &v(&["y"])).unwrap();
         let e: FormulaVars = "@y(@x(x=y -> y=x) -> @x(x=y) -> @x(y=x))".parse().unwrap();
         assert_eq!(e, t.f);
     }
 
     #[test]
     fn a4_xx_fail() {
-        assert!(Theorem::a4(x_eq_y(), y_eq_x(), "x", &["x"]).is_err());
+        assert!(Theorem::a4(x_eq_y(), y_eq_x(), "x", &v(&["x"])).is_err());
     }
 
     #[test]
@@ -401,14 +406,14 @@ mod test {
             x_eq_y().forall("x").unwrap(),
             y_eq_x().forall("x").unwrap(),
             "x",
-            &["y"]
+            &v(&["y"])
         )
         .is_err());
     }
 
     #[test]
     fn a5_xz() {
-        let t = Theorem::a5(z_eq_0(), "x", &["z"]).unwrap();
+        let t = Theorem::a5(z_eq_0(), "x", &v(&["z"])).unwrap();
         let e: FormulaVars = "@z(z = 0 -> @x(z = 0))".parse().unwrap();
         assert_eq!(e, t.f);
     }
@@ -425,14 +430,14 @@ mod test {
 
     #[test]
     fn a6_xy() {
-        let t = Theorem::a6(x_eq_y(), "x", ExprVars::z(), &["y"]).unwrap();
+        let t = Theorem::a6(x_eq_y(), "x", ExprVars::z(), &v(&["y"])).unwrap();
         let e: FormulaVars = "@y(@x(x = y) -> 0 = y)".parse().unwrap();
         assert_eq!(e, t.f);
     }
 
     #[test]
     fn a6_bound_fail() {
-        assert!(Theorem::a6(x_eq_y().forall("x").unwrap(), "x", ExprVars::z(), &["y"]).is_err());
+        assert!(Theorem::a6(x_eq_y().forall("x").unwrap(), "x", ExprVars::z(), &v(&["y"])).is_err());
     }
 
     #[test]
@@ -447,7 +452,7 @@ mod test {
     #[test]
     fn mp_not_imp() {
         let a = Theorem::a1(one_eq_0(), two_eq_0(), &[]).unwrap();
-        let b = Theorem::a2(one_eq_0(), two_eq_0(), one_eq_0(), &["x"]).unwrap();
+        let b = Theorem::a2(one_eq_0(), two_eq_0(), one_eq_0(), &v(&["x"])).unwrap();
         assert!(b.mp(a).is_err());
     }
 
@@ -558,7 +563,7 @@ mod test {
 
     #[test]
     fn aind_xy() {
-        let t = Theorem::aind(x_eq_y(), "x", &["y"]).unwrap();
+        let t = Theorem::aind(x_eq_y(), "x", &v(&["y"])).unwrap();
         let e: FormulaVars = "@y(0=y -> @x(x = y -> S(x) = y) -> @x(x = y))"
             .parse()
             .unwrap();
@@ -567,7 +572,7 @@ mod test {
 
     #[test]
     fn aind_zz_fail() {
-        assert!(Theorem::aind(z_eq_0(), "z", &["z"]).is_err());
+        assert!(Theorem::aind(z_eq_0(), "z", &v(&["z"])).is_err());
     }
 
     #[test]
