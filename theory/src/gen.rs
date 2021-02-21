@@ -1,15 +1,21 @@
-use kernel::pa_formula::{ExprVars,Formula,FormulaVars,SyntaxError};
 use kernel::pa_axiom::{Theorem,TheoremError};
+use kernel::pa_formula::{ExprVars,Formula,FormulaVars,SyntaxError};
+use kernel::pa_parse::ParseError;
 
 #[derive(Debug)]
 pub enum TheoryError {
     Syntax(SyntaxError),
     Axiom(TheoremError),
+    Parse(ParseError),
+    CheckMismatch(String),
+    NotAbsentGen(String),
     NotForAll,
     NotImp,
     NotOuterVar(String),
     RenameInnerConflict(String),
     RenameOuterConflict(String),
+    SubstNotInEnvironment(String),
+    SubstOuterConflict(String),
     VarMismatch(String,String),
     WrongHyp,
 }
@@ -26,10 +32,19 @@ impl From<TheoremError> for TheoryError {
     }
 }
 
+impl From<ParseError> for TheoryError {
+    fn from(e: ParseError) -> Self {
+        TheoryError::Parse(e)
+    }
+}
+
 pub trait TheoremGen : Sized {
+    fn absent_gen(self, gen: &[String]) -> Result<Self, TheoryError>;
+    fn check(self, parseable: &str) -> Result<Self, TheoryError>;
     fn gen_mp(self, other: Self, count: usize) -> Result<Self, TheoryError>;
     fn outer_rename(self, x: &str, y: &str) -> Result<Self, TheoryError>;
     fn subst_gen(self, es: &[ExprVars], gen: &[String]) -> Result<Self, TheoryError>;
+    fn subst_one(self, x: &str, e: ExprVars) -> Result<Self, TheoryError>;
 }
 
 fn peel_forall(a: &FormulaVars) -> Result<(String, FormulaVars), TheoryError> {
@@ -74,7 +89,24 @@ fn peel_foralls_until(a: &FormulaVars, x: &str) -> Result<(Vec<String>, FormulaV
     Ok((vars, f.reconstitute()?))
 }
 
+fn check_expr_environment(e: &ExprVars, vars: &[String]) -> Result<(), TheoryError> {
+    for x in e.free() {
+        if !vars.contains(x) {
+            return Err(TheoryError::SubstNotInEnvironment(x.clone()));
+        }
+    }
+    Ok(())
+}
+
 impl TheoremGen for Theorem {
+    fn check(self, parseable: &str) -> Result<Self, TheoryError> {
+        if parseable.parse::<FormulaVars>()? == *self.formula() {
+            Ok(self)
+        } else {
+            Err(TheoryError::CheckMismatch(parseable.to_owned()))
+        }
+    }
+
     fn outer_rename(self, x: &str, y: &str) -> Result<Self, TheoryError> {
         if x == y {
             return Ok(self);
@@ -98,8 +130,35 @@ impl TheoremGen for Theorem {
         Ok(t2.gen_mp(t1, vars.len())?)    // @v...@y(f[y])
     }
 
+    fn subst_one(self, x: &str, e: ExprVars) -> Result<Self, TheoryError> {
+        let (vars, xf) = peel_foralls_until(self.formula(), x)?;
+        let (_, f) = peel_forall(&xf)?;
+
+        //check_expr_environment(&e, &vars)?;
+
+        if vars.iter().any(|y|y==x) {
+            return Err(TheoryError::SubstOuterConflict(x.to_owned()));
+        }
+
+        // self: @v...@x(f[x])
+        let t1 = Theorem::a6(f, x, e, &vars)?;    // @v...(@x(f[x]) -> f[e])
+        println!("{:?}", t1);
+        Ok(t1.gen_mp(self, vars.len())?)
+    }
+
+    fn absent_gen(mut self, gen: &[String]) -> Result<Self, TheoryError> {
+        for x in gen {
+            if self.formula().has_bound(x) {
+                return Err(TheoryError::NotAbsentGen(x.clone()));
+            }
+            self = Theorem::a5(self.formula().clone(), x, &[])?.mp(self)?;
+        }
+        Ok(self)
+    }
+
     fn subst_gen(self, es: &[ExprVars], gen: &[String]) -> Result<Self, TheoryError> {
         let (vars,f) = peel_foralls(self.formula(), gen.len())?;
+        // self @v...@x(f[x])
         panic!();
     }
 
@@ -142,6 +201,7 @@ impl TheoremGen for Theorem {
 mod test {
     use kernel::pa_axiom::Theorem;
     use kernel::pa_formula::{FormulaVars};
+    use kernel::pa_convenience::num;
     use super::TheoremGen;
 
     #[test]
@@ -186,5 +246,62 @@ mod test {
     fn outer_rename_outer_inner() {
         let t = Theorem::aea1(); // @x(@y(@z(x = y -> x + z = y + z)))
         assert!(t.outer_rename("y", "z").is_err());
+    }
+
+    #[test]
+    fn absent_gen_none() {
+        let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
+        let t1 = t.absent_gen(&[]).unwrap();
+        t1.check("@x(x + 0 = x)").unwrap();
+    }
+
+    fn v(xs: &[&str]) -> Vec<String> {
+        xs.iter().map(|x|(*x).to_owned()).collect()
+    }
+
+    #[test]
+    fn absent_gen_one() {
+        let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
+        let t1 = t.absent_gen(&v(&["y"])).unwrap();
+        t1.check("@y(@x(x + 0 = x))").unwrap();
+    }
+
+    #[test]
+    fn absent_gen_three() {
+        let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
+        let t1 = t.absent_gen(&v(&["y","z","w"])).unwrap();
+        t1.check("@w(@z(@y(@x(x + 0 = x))))").unwrap();
+    }
+
+    #[test]
+    fn absent_gen_same_fail() {
+        let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
+        assert!(t.absent_gen(&v(&["x"])).is_err());
+    }
+
+    #[test]
+    fn subst_one_const() {
+        let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
+        let t1 = t.subst_one("x", num(0)).unwrap();
+        t1.check("0 + 0 = 0").unwrap();
+    }
+
+    #[test]
+    fn subst_one_var1_err() {
+        let t = Theorem::aa2().check("@x(@y(x + S(y) = S(x + y)))").unwrap();
+        assert!(t.subst_one("x", "S(y)".parse().unwrap()).is_err());
+    }
+
+    #[test]
+    fn subst_one_varz_err() {
+        let t = Theorem::aa2().check("@x(@y(x + S(y) = S(x + y)))").unwrap();
+        assert!(t.subst_one("x", "S(z)".parse().unwrap()).is_err());
+    }
+
+    #[test]
+    fn subst_one_var2() {
+        let t = Theorem::aa2().check("@x(@y(x + S(y) = S(x + y)))").unwrap();
+        let t1 = t.subst_one("y", "S(x)".parse().unwrap()).unwrap();
+        t1.check("@x(x + S(S(x)) = S(x + S(x)))").unwrap();
     }
 }

@@ -7,6 +7,7 @@ pub enum TheoremError {
     MixingFreeAndBound(String),
     BoundTwice(String),
     SubstBoundVar(String),
+    SubstForBoundVar(String),
     NotImp,
     WrongHyp,
 }
@@ -91,6 +92,11 @@ impl Theorem {
     }
 
     pub fn a6(a: FormulaVars, x: &str, e: ExprVars, gen: &[String]) -> Result<Self, TheoremError> {
+        for y in e.free() {
+            if a.has_bound(y) {
+                return Err(TheoremError::SubstForBoundVar(y.clone()));
+            }
+        }
         if a.has_bound(x) {
             return Err(TheoremError::SubstBoundVar(x.to_owned()));
         }
@@ -438,6 +444,11 @@ mod test {
     #[test]
     fn a6_bound_fail() {
         assert!(Theorem::a6(x_eq_y().forall("x").unwrap(), "x", ExprVars::z(), &v(&["y"])).is_err());
+    }
+
+    #[test]
+    fn a6_for_bound_fail() {
+        assert!(Theorem::a6(x_eq_y().forall("x").unwrap(), "y", ExprVars::var("x").s(), &[]).is_err());
     }
 
     #[test]

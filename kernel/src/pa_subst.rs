@@ -19,14 +19,28 @@ impl Expr {
 }
 
 impl Formula {
-    fn subst(&self, x: &str, value: &ExprVars) -> FormulaVars {
-        match self {
+    fn subst(&self, x: &str, value: &ExprVars) -> Result<FormulaVars, SyntaxError> {
+        Ok(match self {
             Formula::False => FormulaVars::falsehood(),
             Formula::Eq(a, b) => a.subst(x, value).eq(b.subst(x, value)),
-            Formula::Imp(p, q) => p.subst(x, value).imp(q.subst(x, value)).unwrap(),
-            Formula::ForAll(y, p) => p.subst(x, value).forall(&y).unwrap(),
-            Formula::Memo(m) => m.clone().subst(x, value).unwrap().memo(),
-        }
+            Formula::Imp(p, q) => p.subst(x, value)?.imp(q.subst(x, value)?).unwrap(),
+            Formula::ForAll(y, p) => {
+                if x == y {
+                    return Err(SyntaxError::SubstBoundVar(y.clone()));
+                }
+                if value.has_free(y) {
+                    return Err(SyntaxError::SubstForBoundVar(y.clone()));
+                }
+                p.subst(x, value)?.forall(&y)?
+            }
+            Formula::Memo(m) => m.clone().subst(x, value)?.memo(),
+        })
+    }
+}
+
+impl ExprVars {
+    pub fn has_free(&self, x: &str) -> bool {
+        self.free().iter().any(|y| y == x)
     }
 }
 
@@ -40,10 +54,16 @@ impl FormulaVars {
     }
 
     pub fn subst(self, x: &str, value: &ExprVars) -> Result<FormulaVars, SyntaxError> {
+        for y in value.free() {
+            if self.has_bound(y) {
+                return Err(SyntaxError::SubstForBoundVar(y.clone()));
+            }
+        }
+
         if self.has_bound(x) {
             Err(SyntaxError::SubstBoundVar(x.to_owned()))
         } else if self.has_free(x) {
-            Ok(self.formula().subst(x, value))
+            Ok(self.formula().subst(x, value)?)
         } else {
             Ok(self)
         }

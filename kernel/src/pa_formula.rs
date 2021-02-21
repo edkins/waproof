@@ -5,6 +5,7 @@ pub enum SyntaxError {
     MixingFreeAndBound(String),
     BoundTwice(String),
     SubstBoundVar(String),
+    SubstForBoundVar(String),
 }
 
 #[derive(Clone, Eq, PartialEq)]
