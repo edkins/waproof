@@ -113,7 +113,7 @@ impl Theorem {
         let f = a.clone().imp(a.memo())?.generalize(gen)?;
         Ok(Theorem { f })
     }
-    
+
     pub fn unmemo(a: FormulaVars, gen: &[String]) -> Result<Self, TheoremError> {
         let f = a.clone().memo().imp(a)?.generalize(gen)?;
         Ok(Theorem { f })
