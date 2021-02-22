@@ -251,7 +251,7 @@ fn main() {
     ).get_matches();
 
     let seed = matches.value_of("SEED").map(|s|s.parse::<u64>().unwrap()).unwrap_or(0x123456789abcdef);
-    let mem_size = matches.value_of("MEMORY").map(|m|m.parse::<usize>().unwrap()).unwrap_or(1024);
+    let mem_size = matches.value_of("MEMORY").map(|m|m.parse::<usize>().unwrap()).unwrap_or(16);
     
     let mut mem:Vec<Option<Theorem>> = vec![None;mem_size];
 
@@ -263,11 +263,9 @@ fn main() {
         let b = mem[rng.gen_range(0, mem_size)].as_ref();
         if let (Some(a),Some(b)) = (a,b) {
             if let Ok(t) = a.clone().mp(b.clone()) {
-                if !t.formula().bound().is_empty() {
-                    i += 1;
-                    if i % 100 == 0 {
-                        println!("{:?}", t);
-                    }
+                i += 1;
+                if i % 1000 == 0 {
+                    println!("{:?}", t.formula().formula());
                 }
                 validate(&t);
                 mem[rng.gen_range(0, mem_size)] = Some(t);
