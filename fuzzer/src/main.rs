@@ -5,7 +5,7 @@ use mersenne_twister::MT19937_64;
 use rand::{Rand, Rng, SeedableRng};
 
 fn rand_var<R: Rng>(r: &mut R) -> String {
-    (r.gen_range(b'a', b'g') as char).to_string()
+    (r.gen_range(b'w', b'{') as char).to_string()
 }
 
 fn rand_expr<R: Rng>(r: &mut R, mem: &[Option<Theorem>]) -> ExprVars {

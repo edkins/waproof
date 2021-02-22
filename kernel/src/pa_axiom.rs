@@ -25,7 +25,7 @@ impl From<SyntaxError> for TheoremError {
 
 impl FormulaVars {
     fn generalize(mut self, gen: &[String]) -> Result<Self, TheoremError> {
-        for var in gen {
+        for var in gen.iter().rev() {
             self = self.forall(var)?;
         }
         if let Some(x) = self.free().get(0) {
@@ -370,14 +370,14 @@ mod test {
 
     #[test]
     fn a1_xy() {
-        let t = Theorem::a1(x_eq_y(), y_eq_x(), &v(&["x", "y"])).unwrap();
+        let t = Theorem::a1(x_eq_y(), y_eq_x(), &v(&["y", "x"])).unwrap();
         let expected: FormulaVars = "@y(@x(x = y -> y = x -> x = y))".parse().unwrap();
         assert_eq!(expected, t.f);
     }
 
     #[test]
     fn a1_xy_overgen() {
-        let t = Theorem::a1(x_eq_y(), y_eq_x(), &v(&["x", "y", "z"])).unwrap();
+        let t = Theorem::a1(x_eq_y(), y_eq_x(), &v(&["z", "y", "x"])).unwrap();
         let expected: FormulaVars = "@z(@y(@x(x = y -> y = x -> x = y)))".parse().unwrap();
         assert_eq!(expected, t.f);
     }
@@ -394,7 +394,7 @@ mod test {
 
     #[test]
     fn a2_xyz() {
-        let t = Theorem::a2(x_eq_y(), y_eq_x(), z_eq_0(), &v(&["x", "y", "z"])).unwrap();
+        let t = Theorem::a2(x_eq_y(), y_eq_x(), z_eq_0(), &v(&["z", "y", "x"])).unwrap();
         let expected: FormulaVars =
             "@z(@y(@x((x=y -> y=x -> z=0) -> (x=y -> y=x) -> (x=y -> z=0))))"
                 .parse()
@@ -404,7 +404,7 @@ mod test {
 
     #[test]
     fn a3_xy() {
-        let t = Theorem::a3(x_eq_y(), &v(&["x", "y"])).unwrap();
+        let t = Theorem::a3(x_eq_y(), &v(&["y", "x"])).unwrap();
         let e: FormulaVars = "@y(@x(!!(x=y) -> x=y))".parse().unwrap();
         assert_eq!(e, t.f);
     }

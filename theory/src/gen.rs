@@ -67,7 +67,6 @@ fn peel_foralls(a: &FormulaVars, count: usize) -> Result<(Vec<String>, FormulaVa
             return Err(TheoryError::NotForAll);
         }
     }
-    vars.reverse();
     Ok((vars, f.reconstitute()?))
 }
 
@@ -86,7 +85,6 @@ fn peel_foralls_until(a: &FormulaVars, x: &str) -> Result<(Vec<String>, FormulaV
             return Err(TheoryError::NotOuterVar(x.to_owned()));
         }
     }
-    vars.reverse();
     Ok((vars, f.reconstitute()?))
 }
 
@@ -168,7 +166,7 @@ impl TheoremGen for Theorem {
         // self: @v...@x(f[x])
         let t1 = Theorem::a5(xf, y, &vars)?.gen_mp(self, vars.len())?; // @v...@y(@x(f[x]))
 
-        vars.insert(0, y.to_owned());
+        vars.push(y.to_owned());
         let t2 = Theorem::a6(f, x, ExprVars::var(y), &vars)?;
         Ok(t2.gen_mp(t1, vars.len())?) // @v...@y(f[y])
     }
@@ -190,7 +188,7 @@ impl TheoremGen for Theorem {
     }
 
     fn absent_gen(mut self, gen: &[String]) -> Result<Self, TheoryError> {
-        for x in gen {
+        for x in gen.iter().rev() {
             if self.formula().has_bound(x) {
                 return Err(TheoryError::NotAbsentGen(x.clone()));
             }
@@ -334,7 +332,7 @@ mod test {
     #[test]
     fn absent_gen_three() {
         let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
-        let t1 = t.absent_gen(&v(&["y", "z", "w"])).unwrap();
+        let t1 = t.absent_gen(&v(&["w", "z", "y"])).unwrap();
         t1.check("@w(@z(@y(@x(x + 0 = x))))").unwrap();
     }
 
@@ -438,7 +436,7 @@ mod test {
     #[test]
     fn subst_gen_x_yz() {
         let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
-        let t1 = t.subst_gen(&[ExprVars::var("y").add(ExprVars::var("z"))], &v(&["y","z"])).unwrap();
+        let t1 = t.subst_gen(&[ExprVars::var("y").add(ExprVars::var("z"))], &v(&["z","y"])).unwrap();
         t1.check("@z(@y((y+z) + 0 = (y+z)))").unwrap();
     }
 
