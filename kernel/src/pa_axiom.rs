@@ -69,7 +69,12 @@ impl Theorem {
         Ok(Theorem { f })
     }
 
-    pub fn a4(a: FormulaVars, b: FormulaVars, x: &str, gen: &[String]) -> Result<Self, TheoremError> {
+    pub fn a4(
+        a: FormulaVars,
+        b: FormulaVars,
+        x: &str,
+        gen: &[String],
+    ) -> Result<Self, TheoremError> {
         if a.has_bound(x) || b.has_bound(x) {
             return Err(TheoremError::BoundTwice(x.to_owned()));
         }
@@ -330,7 +335,7 @@ mod test {
     use crate::pa_formula::{ExprVars, FormulaVars};
 
     fn v(xs: &[&str]) -> Vec<String> {
-        xs.iter().map(|x|(*x).to_owned()).collect()
+        xs.iter().map(|x| (*x).to_owned()).collect()
     }
 
     fn x_eq_y() -> FormulaVars {
@@ -443,12 +448,24 @@ mod test {
 
     #[test]
     fn a6_bound_fail() {
-        assert!(Theorem::a6(x_eq_y().forall("x").unwrap(), "x", ExprVars::z(), &v(&["y"])).is_err());
+        assert!(Theorem::a6(
+            x_eq_y().forall("x").unwrap(),
+            "x",
+            ExprVars::z(),
+            &v(&["y"])
+        )
+        .is_err());
     }
 
     #[test]
     fn a6_for_bound_fail() {
-        assert!(Theorem::a6(x_eq_y().forall("x").unwrap(), "y", ExprVars::var("x").s(), &[]).is_err());
+        assert!(Theorem::a6(
+            x_eq_y().forall("x").unwrap(),
+            "y",
+            ExprVars::var("x").s(),
+            &[]
+        )
+        .is_err());
     }
 
     #[test]
