@@ -15,6 +15,7 @@ pub enum TheoryError {
     RenameInnerConflict(String),
     RenameOuterConflict(String),
     SubstNotInEnvironment(String),
+    SubstInnerConflict(String),
     SubstOuterConflict(String),
     VarMismatch(String, String),
     WrongHyp,
@@ -98,6 +99,48 @@ fn check_expr_environment(e: &ExprVars, vars: &[String]) -> Result<(), TheoryErr
     Ok(())
 }
 
+// This implementation is so silly
+fn incr(x: &str) -> String {
+    let mut carry = true;
+    let mut result = String::new();
+    for ch in x.chars().rev() {
+        if carry {
+            if ch == '9' {
+                result.push('0');
+            } else if ch.is_ascii_digit() {
+                result.push(((ch as u8) + 1) as char);
+                carry = false;
+            } else {
+                result.push('1');
+                result.push(ch);
+                carry = false;
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+    if carry {
+        result.push('1');
+    }
+    result.chars().rev().collect()
+}
+
+fn rename_to_avoid(xs: &[String], avoid_lists: &[&[String]]) -> Vec<String> {
+    let mut result = vec![];
+    for x in xs {
+        if avoid_lists.iter().any(|list|list.contains(x)) {
+            let mut y = incr(x);
+            while xs.contains(&y) || avoid_lists.iter().any(|list|list.contains(&y)) {
+                y = incr(&y);
+            }
+            result.push(y);
+        } else {
+            result.push(x.clone());
+        }
+    }
+    result
+}
+
 impl TheoremGen for Theorem {
     fn check(self, parseable: &str) -> Result<Self, TheoryError> {
         if parseable.parse::<FormulaVars>()? == *self.formula() {
@@ -134,7 +177,7 @@ impl TheoremGen for Theorem {
         let (vars, xf) = peel_foralls_until(self.formula(), x)?;
         let (_, f) = peel_forall(&xf)?;
 
-        //check_expr_environment(&e, &vars)?;
+        check_expr_environment(&e, &vars)?;
 
         if vars.iter().any(|y| y == x) {
             return Err(TheoryError::SubstOuterConflict(x.to_owned()));
@@ -156,10 +199,32 @@ impl TheoremGen for Theorem {
         Ok(self)
     }
 
-    fn subst_gen(self, es: &[ExprVars], gen: &[String]) -> Result<Self, TheoryError> {
-        let (vars, f) = peel_foralls(self.formula(), gen.len())?;
-        // self @v...@x(f[x])
-        panic!();
+    fn subst_gen(mut self, es: &[ExprVars], gen: &[String]) -> Result<Self, TheoryError> {
+        for expr in es {
+            check_expr_environment(&expr, gen)?;
+        }
+
+        let (orig_vars, f) = peel_foralls(self.formula(), es.len())?;
+
+        for y in f.bound() {
+            if gen.contains(y) {
+                return Err(TheoryError::SubstInnerConflict(y.clone()));
+            }
+        }
+
+        // @o...(f[o...])
+        let vars = rename_to_avoid(&orig_vars, &[f.bound(), &gen]);
+        for i in 0..vars.len() {
+            self = self.outer_rename(&orig_vars[i], &vars[i])?;
+        }
+        // @v...(f[v...])
+        self = self.absent_gen(gen)?;
+        // @g...@v...(f[v...])
+        for i in 0..vars.len() {
+            self = self.subst_one(&vars[i], es[i].clone())?;
+        }
+        // @g...f[e...]
+        Ok(self)
     }
 
     fn gen_mp(self, other: Self, count: usize) -> Result<Self, TheoryError> {
@@ -176,7 +241,7 @@ impl TheoremGen for Theorem {
             let (x, ab) = peel_forall(&xa)?;
             let (y, a) = peel_forall(&yb)?;
             if x != y {
-                return Err(TheoryError::VarMismatch(x.clone(), y.clone()));
+                return Err(TheoryError::VarMismatch(x, y));
             }
             let b = match ab.formula() {
                 Formula::Imp(h, af) => {
@@ -189,8 +254,8 @@ impl TheoremGen for Theorem {
             };
             // self: @xs...@x(a->b)
             // other: @xs...@x(a)
-            let t = Theorem::a4(a, b, &x, &xs)?; // @xs...(@x(a->b)->(@x(a)->@x(b)))
-            let t1 = t.gen_mp(self, count - 1)?;
+            let t0 = Theorem::a4(a, b, &x, &xs)?; // @xs...(@x(a->b)->(@x(a)->@x(b)))
+            let t1 = t0.gen_mp(self, count - 1)?;
             let t2 = t1.gen_mp(other, count - 1)?;
             Ok(t2)
         }
@@ -199,10 +264,10 @@ impl TheoremGen for Theorem {
 
 #[cfg(test)]
 mod test {
-    use super::TheoremGen;
+    use super::{incr,TheoremGen};
     use kernel::pa_axiom::Theorem;
     use kernel::pa_convenience::num;
-    use kernel::pa_formula::FormulaVars;
+    use kernel::pa_formula::{ExprVars,FormulaVars};
 
     #[test]
     fn outer_rename_same() {
@@ -303,5 +368,84 @@ mod test {
         let t = Theorem::aa2().check("@x(@y(x + S(y) = S(x + y)))").unwrap();
         let t1 = t.subst_one("y", "S(x)".parse().unwrap()).unwrap();
         t1.check("@x(x + S(S(x)) = S(x + S(x)))").unwrap();
+    }
+
+    #[test]
+    fn incr_x() {
+        assert_eq!(&incr("x"), "x1");
+    }
+
+    #[test]
+    fn incr_x1() {
+        assert_eq!(&incr("x1"), "x2");
+    }
+
+    #[test]
+    fn incr_x9() {
+        assert_eq!(&incr("x9"), "x10");
+    }
+
+    #[test]
+    fn incr_x89() {
+        assert_eq!(&incr("x89"), "x90");
+    }
+
+    #[test]
+    fn incr_x94() {
+        assert_eq!(&incr("x94"), "x95");
+    }
+
+    #[test]
+    fn incr_x99() {
+        assert_eq!(&incr("x99"), "x100");
+    }
+
+    #[test]
+    fn subst_gen_x_x() {
+        let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
+        let t1 = t.subst_gen(&[ExprVars::var("x")], &v(&["x"])).unwrap();
+        t1.check("@x(x + 0 = x)").unwrap();
+    }
+
+    #[test]
+    fn subst_gen_x_y() {
+        let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
+        let t1 = t.subst_gen(&[ExprVars::var("y")], &v(&["y"])).unwrap();
+        t1.check("@y(y + 0 = y)").unwrap();
+    }
+
+    #[test]
+    fn subst_gen_x_0() {
+        let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
+        let t1 = t.subst_gen(&[num(0)], &v(&[])).unwrap();
+        t1.check("0 + 0 = 0").unwrap();
+    }
+
+    #[test]
+    fn subst_gen_x_0_gen() {
+        let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
+        let t1 = t.subst_gen(&[num(0)], &v(&["z"])).unwrap();
+        t1.check("@z(0 + 0 = 0)").unwrap();
+    }
+
+    #[test]
+    fn subst_gen_x_0_genx() {
+        let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
+        let t1 = t.subst_gen(&[num(0)], &v(&["x"])).unwrap();
+        t1.check("@x(0 + 0 = 0)").unwrap();
+    }
+
+    #[test]
+    fn subst_gen_x_yz() {
+        let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
+        let t1 = t.subst_gen(&[ExprVars::var("y").add(ExprVars::var("z"))], &v(&["y","z"])).unwrap();
+        t1.check("@z(@y((y+z) + 0 = (y+z)))").unwrap();
+    }
+
+    #[test]
+    fn subst_gen_xy_01() {
+        let t = Theorem::aa2().check("@x(@y(x + S(y) = S(x + y)))").unwrap();
+        let t1 = t.subst_gen(&[num(0),num(1)], &[]).unwrap();
+        t1.check("0 + S(1) = S(0 + 1)").unwrap();
     }
 }
