@@ -8,6 +8,7 @@ pub enum TheoryError {
     Axiom(TheoremError),
     Parse(ParseError),
     CheckMismatch(String),
+    ComposeMismatch,
     NotAbsentGen(String),
     NotForAll,
     NotImp,
@@ -62,7 +63,10 @@ fn peel_forall(a: &FormulaVars) -> Result<(String, FormulaVars), TheoryError> {
     }
 }
 
-fn peel_foralls(a: &FormulaVars, count: usize) -> Result<(Vec<String>, FormulaVars), TheoryError> {
+pub fn peel_foralls(
+    a: &FormulaVars,
+    count: usize,
+) -> Result<(Vec<String>, FormulaVars), TheoryError> {
     let mut vars = vec![];
     let mut f = a.formula();
     for _ in 0..count {
@@ -132,9 +136,9 @@ fn incr(x: &str) -> String {
 fn rename_to_avoid(xs: &[String], avoid_lists: &[&[String]]) -> Vec<String> {
     let mut result = vec![];
     for x in xs {
-        if avoid_lists.iter().any(|list|list.contains(x)) {
+        if avoid_lists.iter().any(|list| list.contains(x)) {
             let mut y = incr(x);
-            while xs.contains(&y) || avoid_lists.iter().any(|list|list.contains(&y)) {
+            while xs.contains(&y) || avoid_lists.iter().any(|list| list.contains(&y)) {
                 y = incr(&y);
             }
             result.push(y);
@@ -277,17 +281,17 @@ impl TheoremGen for Theorem {
             }
         }
 
-        let exprs:Vec<_> = vars.iter().map(|x|ExprVars::var(x)).collect();
+        let exprs: Vec<_> = vars.iter().map(|x| ExprVars::var(x)).collect();
         self.subst_gen(&exprs, xs)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::{incr,TheoremGen};
+    use super::{incr, TheoremGen};
     use kernel::pa_axiom::Theorem;
     use kernel::pa_convenience::num;
-    use kernel::pa_formula::{ExprVars,FormulaVars};
+    use kernel::pa_formula::{ExprVars, FormulaVars};
 
     #[test]
     fn outer_rename_same() {
@@ -458,45 +462,63 @@ mod test {
     #[test]
     fn subst_gen_x_yz() {
         let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
-        let t1 = t.subst_gen(&[ExprVars::var("y").add(ExprVars::var("z"))], &v(&["z","y"])).unwrap();
+        let t1 = t
+            .subst_gen(
+                &[ExprVars::var("y").add(ExprVars::var("z"))],
+                &v(&["z", "y"]),
+            )
+            .unwrap();
         t1.check("@z(@y((y+z) + 0 = (y+z)))").unwrap();
     }
 
     #[test]
     fn subst_gen_xy_01() {
         let t = Theorem::aa2().check("@x(@y(x + S(y) = S(x + y)))").unwrap();
-        let t1 = t.subst_gen(&[num(0),num(1)], &[]).unwrap();
+        let t1 = t.subst_gen(&[num(0), num(1)], &[]).unwrap();
         t1.check("0 + S(1) = S(0 + 1)").unwrap();
     }
 
     #[test]
     fn subst_gen_xy_yx1() {
         let t = Theorem::aa2().check("@x(@y(x + S(y) = S(x + y)))").unwrap();
-        let t1 = t.subst_gen(&[ExprVars::var("y"),ExprVars::var("x")], &v(&["x","y"])).unwrap();
+        let t1 = t
+            .subst_gen(&[ExprVars::var("y"), ExprVars::var("x")], &v(&["x", "y"]))
+            .unwrap();
         t1.check("@x(@y(y + S(x) = S(y + x)))").unwrap();
     }
 
     #[test]
     fn subst_gen_xy_yx2() {
         let t = Theorem::aa2().check("@x(@y(x + S(y) = S(x + y)))").unwrap();
-        let t1 = t.subst_gen(&[ExprVars::var("y"),ExprVars::var("x")], &v(&["y","x"])).unwrap();
+        let t1 = t
+            .subst_gen(&[ExprVars::var("y"), ExprVars::var("x")], &v(&["y", "x"]))
+            .unwrap();
         t1.check("@y(@x(y + S(x) = S(y + x)))").unwrap();
     }
 
     #[test]
     fn subst_gen_xy_xx() {
         let t = Theorem::aa2().check("@x(@y(x + S(y) = S(x + y)))").unwrap();
-        let t1 = t.subst_gen(&[ExprVars::var("x"),ExprVars::var("x")], &v(&["x"])).unwrap();
+        let t1 = t
+            .subst_gen(&[ExprVars::var("x"), ExprVars::var("x")], &v(&["x"]))
+            .unwrap();
         t1.check("@x(x + S(x) = S(x + x))").unwrap();
     }
 
     #[test]
     fn gen_mp_one() {
         let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
-        let t1 = Theorem::aea1().check("@x(@y(@z(x = y -> x + z = y + z)))").unwrap();
-        let t2 = t1.subst_gen(&[ExprVars::var("x").add(num(0)), ExprVars::var("x"), num(0)], &v(&["x"])).unwrap();
+        let t1 = Theorem::aea1()
+            .check("@x(@y(@z(x = y -> x + z = y + z)))")
+            .unwrap();
+        let t2 = t1
+            .subst_gen(
+                &[ExprVars::var("x").add(num(0)), ExprVars::var("x"), num(0)],
+                &v(&["x"]),
+            )
+            .unwrap();
         t2.checkr("@x(x + 0 = x -> (x + 0) + 0 = x + 0)").unwrap();
-        let t3 = t2.gen_mp(t,1).unwrap();
+        let t3 = t2.gen_mp(t, 1).unwrap();
         t3.checkr("@x((x + 0) + 0 = x + 0)").unwrap();
     }
 
@@ -505,28 +527,40 @@ mod test {
         let t = Theorem::aa1()
             .absent_gen(&v(&["z"]))
             .unwrap()
-            .reorder_gen(&v(&["x","z"]))
+            .reorder_gen(&v(&["x", "z"]))
             .unwrap()
-            .check("@x(@z(x + 0 = x))").unwrap();
-        let t1 = Theorem::aea1().check("@x(@y(@z(x = y -> x + z = y + z)))").unwrap();
-        let t2 = t1.subst_gen(&[ExprVars::var("x").add(num(0)), ExprVars::var("x")], &v(&["x"]))
+            .check("@x(@z(x + 0 = x))")
+            .unwrap();
+        let t1 = Theorem::aea1()
+            .check("@x(@y(@z(x = y -> x + z = y + z)))")
+            .unwrap();
+        let t2 = t1
+            .subst_gen(
+                &[ExprVars::var("x").add(num(0)), ExprVars::var("x")],
+                &v(&["x"]),
+            )
             .unwrap()
-            .check("@x(@z(x + 0 = x -> (x + 0) + z = x + z))").unwrap();
-        let t3 = t2.gen_mp(t,2).unwrap();
+            .check("@x(@z(x + 0 = x -> (x + 0) + z = x + z))")
+            .unwrap();
+        let t3 = t2.gen_mp(t, 2).unwrap();
         t3.checkr("@x(@z((x + 0) + z = x + z))").unwrap();
     }
 
     #[test]
     fn reorder_gen_same() {
-        let t1 = Theorem::aea1().check("@x(@y(@z(x = y -> x + z = y + z)))").unwrap();
-        let t2 = t1.reorder_gen(&v(&["x","y","z"])).unwrap();
+        let t1 = Theorem::aea1()
+            .check("@x(@y(@z(x = y -> x + z = y + z)))")
+            .unwrap();
+        let t2 = t1.reorder_gen(&v(&["x", "y", "z"])).unwrap();
         t2.checkr("@x(@y(@z(x = y -> x + z = y + z)))").unwrap();
     }
 
     #[test]
     fn reorder_gen_different() {
-        let t1 = Theorem::aea1().check("@x(@y(@z(x = y -> x + z = y + z)))").unwrap();
-        let t2 = t1.reorder_gen(&v(&["y","z","x"])).unwrap();
+        let t1 = Theorem::aea1()
+            .check("@x(@y(@z(x = y -> x + z = y + z)))")
+            .unwrap();
+        let t2 = t1.reorder_gen(&v(&["y", "z", "x"])).unwrap();
         t2.checkr("@y(@z(@x(x = y -> x + z = y + z)))").unwrap();
     }
 }
