@@ -166,14 +166,14 @@ fn rand_var_maybe_from<R:Rng>(r:&mut R, vars: &[String]) -> String {
 
 fn rand_axiom<R:Rng>(r:&mut R, mem: &[Option<Theorem>], stats: &mut[usize]) -> Result<Theorem,TheoremError> {
     let x = f32::rand(r);
-    if x < 0.10 {
+    if x < 0.08 {
         let a = rand_formula(r, mem)?;
         let b = rand_formula(r, mem)?;
         let vars = roughly(&merge_lists(&[a.free(), b.free()]),r);
         let t = Theorem::a1(a, b, &vars)?;
         stats[0] += 1;
         Ok(t)
-    } else if x < 0.20 {
+    } else if x < 0.16 {
         let a = rand_formula(r, mem)?;
         let b = rand_formula(r, mem)?;
         let c = rand_formula(r, mem)?;
@@ -181,13 +181,13 @@ fn rand_axiom<R:Rng>(r:&mut R, mem: &[Option<Theorem>], stats: &mut[usize]) -> R
         let t = Theorem::a2(a, b, c, &vars)?;
         stats[1] += 1;
         Ok(t)
-    } else if x < 0.30 {
+    } else if x < 0.24 {
         let a = rand_formula(r, mem)?;
         let vars = roughly(&a.free(),r);
         let t = Theorem::a3(a, &vars)?;
         stats[2] += 1;
         Ok(t)
-    } else if x < 0.40 {
+    } else if x < 0.32 {
         let a = rand_formula(r, mem)?;
         let b = rand_formula(r, mem)?;
         let vars = merge_lists(&[a.free(), b.free()]);
@@ -197,14 +197,14 @@ fn rand_axiom<R:Rng>(r:&mut R, mem: &[Option<Theorem>], stats: &mut[usize]) -> R
         let t = Theorem::a4(a, b, &x, &vars)?;
         stats[3] += 1;
         Ok(t)
-    } else if x < 0.50 {
+    } else if x < 0.40 {
         let a = rand_formula(r, mem)?;
         let x = rand_var(r);
         let vars = roughly(&a.free(),r);
         let t = Theorem::a5(a, &x, &vars)?;
         stats[4] += 1;
         Ok(t)
-    } else if x < 0.60 {
+    } else if x < 0.48 {
         let a = rand_formula(r, mem)?;
         let x = rand_var_maybe_from(r, a.free());
         let e = rand_expr(r, mem);
@@ -213,13 +213,25 @@ fn rand_axiom<R:Rng>(r:&mut R, mem: &[Option<Theorem>], stats: &mut[usize]) -> R
         let t = Theorem::a6(a, &x, e, &vars)?;
         stats[5] += 1;
         Ok(t)
-    } else if x < 0.70 {
+    } else if x < 0.56 {
         let a = rand_formula(r, mem)?;
         let x = rand_var(r);
         let vars:Vec<String> = a.free().iter().filter(|y|**y != x).map(|s|(**s).to_owned()).collect();
         let vars = roughly(&vars,r);
         let t = Theorem::aind(a, &x, &vars)?;
         stats[6] += 1;
+        Ok(t)
+    } else if x < 0.63 {
+        let a = rand_formula(r, mem)?;
+        let vars = roughly(&a.free(),r);
+        let t = Theorem::memo(a, &vars)?;
+        stats[7] += 1;
+        Ok(t)
+    } else if x < 0.70 {
+        let a = rand_formula(r, mem)?;
+        let vars = roughly(&a.free(),r);
+        let t = Theorem::unmemo(a, &vars)?;
+        stats[8] += 1;
         Ok(t)
     } else if x < 0.72 {
         Ok(Theorem::ae1())
@@ -280,7 +292,7 @@ fn main() {
 
     let mut i = 0;
     let mut rng: MT19937_64 = SeedableRng::from_seed(seed);
-    let mut stats = [0;7];
+    let mut stats = [0;9];
 
     loop {
         let a = mem[rng.gen_range(0, mem_size)].as_ref();

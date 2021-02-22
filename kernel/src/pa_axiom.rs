@@ -36,7 +36,7 @@ impl FormulaVars {
     }
 }
 
-// FOL Axioms
+// FOL Axioms and memoing
 impl Theorem {
     pub fn formula(&self) -> &FormulaVars {
         &self.f
@@ -106,6 +106,16 @@ impl Theorem {
             return Err(TheoremError::SubstBoundVar(x.to_owned()));
         }
         let f = a.clone().forall(x)?.imp(a.subst(x, &e)?)?.generalize(gen)?;
+        Ok(Theorem { f })
+    }
+
+    pub fn memo(a: FormulaVars, gen: &[String]) -> Result<Self, TheoremError> {
+        let f = a.clone().imp(a.memo())?.generalize(gen)?;
+        Ok(Theorem { f })
+    }
+    
+    pub fn unmemo(a: FormulaVars, gen: &[String]) -> Result<Self, TheoremError> {
+        let f = a.clone().memo().imp(a)?.generalize(gen)?;
         Ok(Theorem { f })
     }
 
