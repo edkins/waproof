@@ -1,8 +1,6 @@
-use crate::gen::TheoremGen;
-use crate::hyp::TheoremHyp;
+use crate::boxing::{Boxes,TheoremBox};
+use crate::eq::TheoremEq;
 use kernel::pa_axiom::Theorem;
-use kernel::pa_convenience::num;
-use kernel::pa_formula::ExprVars;
 
 /// ```
 /// use theory::add::add_0_r;
@@ -24,10 +22,6 @@ pub fn add_succ_r() -> Theorem {
     Theorem::aa2()
 }
 
-fn x() -> ExprVars {
-    ExprVars::var("x")
-}
-
 /// ```
 /// use theory::add::add_0_l;
 /// use theory::gen::TheoremGen;
@@ -35,45 +29,16 @@ fn x() -> ExprVars {
 /// add_0_l().check("@x(0 + x = x)").unwrap();
 /// ```
 pub fn add_0_l() -> Theorem {
-    let t0 = add_0_r()
-        .subst_gen(&[num(0)], &[])
-        .unwrap()
-        .check("0 + 0 = 0")
-        .unwrap();
-    let t1 = add_succ_r()
-        .subst_gen(&[num(0), x()], &["x".to_owned()])
-        .unwrap()
-        .check("@x(0 + S(x) = S(0 + x))")
-        .unwrap();
-    let t2 = Theorem::ae3()
-        .subst_gen(
-            &[num(0).add(x().s()), num(0).add(x()).s(), x().s()],
-            &["x".to_owned()],
-        )
-        .unwrap()
-        .check("@x(0 + S(x) = S(0 + x) -> S(0 + x) = S(x) -> 0 + S(x) = S(x))")
-        .unwrap();
-    let t3 = t2
-        .gen_mp(t1, 1)
-        .unwrap()
-        .check("@x(S(0 + x) = S(x) -> 0 + S(x) = S(x))")
-        .unwrap();
-
-    let t4 = Theorem::aes()
-        .subst_gen(&[num(0).add(x()), x()], &["x".to_owned()])
-        .unwrap()
-        .check("@x(0 + x = x -> S(0 + x) = S(x))")
-        .unwrap();
-
-    let t5 = t4
-        .compose(t3, 1)
-        .unwrap()
-        .check("@x(0 + x = x -> 0 + S(x) = S(x))")
-        .unwrap();
-    Theorem::aind(num(0).add(x()).eq(x()), "x", &[])
-        .unwrap()
-        .mp(t0)
-        .unwrap()
-        .mp(t5)
-        .unwrap()
+    let mut boxes = Boxes::default();
+    boxes.push_var("x").unwrap();
+    let eq = boxes.push_and_get("0 + x = x").unwrap();
+    let t0 = add_succ_r().import_subst(&boxes, &["0","x"]).unwrap();
+    t0.chk("@x(0 + x = x -> 0 + S(x) = S(0 + x))");
+    let t1 = t0.eq_subst(eq, "0 + S(x) = S(x)", &boxes).unwrap();
+    t1.chk("@x(0 + x = x -> 0 + S(x) = S(x))");
+    boxes.pop().unwrap();
+    boxes.pop().unwrap();
+    let t2 = add_0_r().import_subst(&boxes, &["0"]).unwrap();
+    t2.chk("0 + 0 = 0");
+    t1.induction(t2, &boxes).unwrap()
 }

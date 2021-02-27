@@ -92,6 +92,12 @@ pub trait TheoremBox: Sized {
     /// t2.chk("@x(@y(x = 0 -> y = 0 -> y = 0))");
     /// ```
     fn imp_self(f: impl ToFormula, boxes: &[Boxing]) -> Result<Self, TheoryError>;
+
+    /// Prove a theorem by induction.
+    ///
+    /// self is ...@x(H[x] -> H[S(x)]
+    /// base is ...H[0]
+    fn induction(self, base: Self, boxes: &[Boxing]) -> Result<Self, TheoryError>;
 }
 
 pub fn peel_box_exact(a: &FormulaVars, boxes: &[Boxing]) -> Result<FormulaVars, TheoryError> {
@@ -284,6 +290,23 @@ impl TheoremBox for Theorem {
         let t5 = t3.gen_mp(t4, xs.len())?; // @... (x -> x)
         install_hyps(t5, boxes, &xs)
     }
+
+    fn induction(self, base: Self, boxes: &[Boxing]) -> Result<Self, TheoryError> {
+        let forall = peel_box_exact(self.formula(), boxes)?;
+        if let Formula::ForAll(x, fx_fsx) = forall.formula() {
+            if let Formula::Imp(fx, _) = &**fx_fsx {
+                if boxes.is_empty() {
+                    Ok(Theorem::aind(fx.reconstitute()?, &x, &[])?.mp(base)?.mp(self)?)
+                } else {
+                    panic!("Not implemented boxed induction yet");
+                }
+            } else {
+                Err(TheoryError::NotImp)
+            }
+        } else {
+            Err(TheoryError::NotForAll)
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -388,6 +411,22 @@ impl Boxes {
         }
         self.0.push(Boxing::Hyp(f));
         Ok(())
+    }
+
+    /// `push_hyp`, but it returns the thing you've pushed as a theorem
+    ///
+    /// ```
+    /// use theory::boxing::Boxes;
+    ///
+    /// let mut boxes = Boxes::default();
+    /// let t = boxes.push_and_get("0 = 1").unwrap();
+    /// t.chk("0 = 1 -> 0 = 1");
+    /// ```
+    pub fn push_and_get(&mut self, hyp: impl ToFormula) -> Result<Theorem, TheoryError> {
+        let f = hyp.to_formula()?;
+        let result = Theorem::imp_self(f.clone(), self)?;
+        self.push_hyp(f)?;
+        Ok(result)
     }
 
     /// Pops something off the top of the stack of boxes (either a variable or a hypothesis)

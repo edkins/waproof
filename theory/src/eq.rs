@@ -9,6 +9,8 @@ pub trait TheoremEq: Sized {
     /// are equal. Operates inside a box, i.e. the equality might be conditional on some
     /// hypotheses.
     ///
+    /// `target` does not include the boxed stuff.
+    ///
     /// ```
     /// use kernel::pa_axiom::Theorem;
     /// use theory::boxing::TheoremBox;
@@ -215,7 +217,7 @@ impl TheoremEq for Theorem {
     ) -> Result<Self, TheoryError> {
         let eqf = boxing::peel_box_exact(equality.formula(), boxes)?;
         let sourcef = boxing::peel_box_exact(self.formula(), boxes)?;
-        let targetf = boxing::peel_box_exact(&target.to_formula()?, boxes)?;
+        let targetf = target.to_formula()?;
         let (eq_left, eq_right) = match eqf.formula() {
             Formula::Eq(a, b) => (a, b),
             _ => return Err(TheoryError::NotEquality),
@@ -250,7 +252,7 @@ mod test {
         t0.chk("@x(x = x)");
         let t1 = t0.import_subst(&boxes, &["S(y)"]).unwrap();
         t1.chk("@x(@y(x = y -> S(y) = S(y)))");
-        let t2 = t1.eq_subst(eq, "@x(@y(x = y -> S(y) = S(x)))", &boxes).unwrap();
+        let t2 = t1.eq_subst(eq, "S(y) = S(x)", &boxes).unwrap();
         t2.chk("@x(@y(x = y -> S(y) = S(x)))");
     }
 
@@ -266,7 +268,7 @@ mod test {
         t0.chk("@x(x = x)");
         let t1 = t0.import_subst(&boxes, &["S(y)"]).unwrap();
         t1.chk("@x(@y(x = y -> S(y) = S(y)))");
-        let t2 = t1.eq_subst(eq, "@x(@y(x = y -> S(x) = S(y)))", &boxes).unwrap();
+        let t2 = t1.eq_subst(eq, "S(x) = S(y)", &boxes).unwrap();
         t2.chk("@x(@y(x = y -> S(x) = S(y)))");
     }
 
@@ -282,7 +284,7 @@ mod test {
         t0.chk("@x(x = x)");
         let t1 = t0.import_subst(&boxes, &["S(y)"]).unwrap();
         t1.chk("@x(@y(x = y -> S(y) = S(y)))");
-        let t2 = t1.eq_subst(eq, "@x(@y(x = y -> S(x) = S(x)))", &boxes).unwrap();
+        let t2 = t1.eq_subst(eq, "S(x) = S(x)", &boxes).unwrap();
         t2.chk("@x(@y(x = y -> S(x) = S(x)))");
     }
 
@@ -298,7 +300,7 @@ mod test {
         t0.chk("@x(x + 0 = x)");
         let t1 = t0.import_subst(&boxes, &["x"]).unwrap();
         t1.chk("@x(@y(x = y -> x + 0 = x))");
-        let t2 = t1.eq_subst(eq, "@x(@y(x = y -> y + 0 = x))", &boxes).unwrap();
+        let t2 = t1.eq_subst(eq, "y + 0 = x", &boxes).unwrap();
         t2.chk("@x(@y(x = y -> y + 0 = x))");
     }
 
@@ -313,7 +315,7 @@ mod test {
         t0.chk("@x(x + 0 = x)");
         let t1 = t0.import_subst(&boxes, &["x"]).unwrap();
         t1.chk("@x(x = 0 -> x + 0 = x)");
-        let t2 = t1.eq_subst(eq, "@x(x = 0 -> x + x = x)", &boxes).unwrap();
+        let t2 = t1.eq_subst(eq, "x + x = x", &boxes).unwrap();
         t2.chk("@x(x = 0 -> x + x = x)");
     }
 
@@ -328,7 +330,7 @@ mod test {
         t0.chk("@x(x + 0 = x)");
         let t1 = t0.import_subst(&boxes, &["x"]).unwrap();
         t1.chk("@x(x = 0 -> x + 0 = x)");
-        let t2 = t1.eq_subst(eq, "@x(x = 0 -> 0 + x = x)", &boxes).unwrap();
+        let t2 = t1.eq_subst(eq, "0 + x = x", &boxes).unwrap();
         t2.chk("@x(x = 0 -> 0 + x = x)");
     }
 
@@ -344,7 +346,7 @@ mod test {
         t0.chk("@x(x * 0 = 0)");
         let t1 = t0.import_subst(&boxes, &["x"]).unwrap();
         t1.chk("@x(@y(x = y -> x * 0 = 0))");
-        let t2 = t1.eq_subst(eq, "@x(@y(x = y -> y * 0 = 0))", &boxes).unwrap();
+        let t2 = t1.eq_subst(eq, "y * 0 = 0", &boxes).unwrap();
         t2.chk("@x(@y(x = y -> y * 0 = 0))");
     }
 
@@ -359,7 +361,7 @@ mod test {
         t0.chk("@x(x * 0 = 0)");
         let t1 = t0.import_subst(&boxes, &["x"]).unwrap();
         t1.chk("@x(x = 0 -> x * 0 = 0)");
-        let t2 = t1.eq_subst(eq, "@x(x = 0 -> x * x = 0)", &boxes).unwrap();
+        let t2 = t1.eq_subst(eq, "x * x = 0", &boxes).unwrap();
         t2.chk("@x(x = 0 -> x * x = 0)");
     }
 
@@ -374,7 +376,7 @@ mod test {
         t0.chk("@x(x * 0 = 0)");
         let t1 = t0.import_subst(&boxes, &["x"]).unwrap();
         t1.chk("@x(x = 0 -> x * 0 = 0)");
-        let t2 = t1.eq_subst(eq, "@x(x = 0 -> 0 * x = 0)", &boxes).unwrap();
+        let t2 = t1.eq_subst(eq, "0 * x = 0", &boxes).unwrap();
         t2.chk("@x(x = 0 -> 0 * x = 0)");
     }
 
@@ -389,7 +391,7 @@ mod test {
         let t0 = Theorem::aa1().import_subst(&boxes, &["x"]).unwrap();
         t0.chk("@x(x = 0 -> @y(x + 0 = x))");
         boxes.pop().unwrap();
-        let t1 = t0.eq_subst(eq, "@x(x = 0 -> @y(0 + 0 = x))", &boxes).unwrap();
+        let t1 = t0.eq_subst(eq, "@y(0 + 0 = x)", &boxes).unwrap();
         t1.chk("@x(x = 0 -> @y(0 + 0 = x))");
     }
 }
