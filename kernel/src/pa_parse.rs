@@ -252,6 +252,28 @@ impl ToFormula for &str {
     }
 }
 
+pub trait ToExpr {
+    fn to_expr(self) -> Result<ExprVars, ParseError>;
+}
+
+impl ToExpr for ExprVars {
+    fn to_expr(self) -> Result<ExprVars, ParseError> {
+        Ok(self)
+    }
+}
+
+impl ToExpr for &ExprVars {
+    fn to_expr(self) -> Result<ExprVars, ParseError> {
+        Ok(self.clone())
+    }
+}
+
+impl ToExpr for &str {
+    fn to_expr(self) -> Result<ExprVars, ParseError> {
+        self.parse()
+    }
+}
+
 impl Theorem {
     pub fn checkr(&self, parseable: impl ToFormula + Clone + Debug) -> Result<(), ParseError> {
         if parseable.clone().to_formula()? == *self.formula() {

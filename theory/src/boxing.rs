@@ -3,7 +3,7 @@ use std::ops::Deref;
 use crate::gen::{peel_foralls, TheoremGen, TheoryError};
 use kernel::pa_axiom::Theorem;
 use kernel::pa_formula::{Formula, FormulaVars};
-use kernel::pa_parse::ToFormula;
+use kernel::pa_parse::{ToFormula,ToExpr};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Boxing {
@@ -40,17 +40,39 @@ pub trait TheoremBox: Sized {
     ///
     /// ```
     /// use kernel::pa_axiom::Theorem;
-    /// use theory::boxing::{Boxes,TheoremBox,Boxing};
+    /// use theory::boxing::{Boxes,TheoremBox};
     ///
     /// let mut boxes = Boxes::default();
     /// boxes.push_var("x").unwrap();
     /// let t1 = Theorem::box_a1("x = x", "x = 0", &boxes).unwrap();
-    /// boxes.push_hyp("x = x");
+    /// boxes.push_hyp("x = x").unwrap();
     /// boxes.push_var("y").unwrap();
     /// t1.chk("@x(x = x -> x = 0 -> x = x)");
     /// t1.import(2, &boxes).unwrap().chk("@x(x = x -> @y(x = 0 -> x = x))");
     /// ```
     fn import(self, depth: usize, boxes: &[Boxing]) -> Result<Self, TheoryError>;
+
+    /// Take a formula from the global context (no boxes), import it into a box
+    /// and substitute some variables.
+    ///
+    /// In this example, the variable name `x` is peeled off and then reused. This
+    /// is ok.
+    ///
+    /// ```
+    /// use kernel::pa_axiom::Theorem;
+    /// use theory::boxing::{Boxes,TheoremBox};
+    ///
+    /// let mut boxes = Boxes::default();
+    /// boxes.push_var("x").unwrap();
+    /// boxes.push_hyp("x = x").unwrap();
+    ///
+    /// let aa1 = Theorem::aa1();
+    /// aa1.chk("@x(x + 0 = x)");
+    ///
+    /// let t = aa1.import_subst(&boxes, &["S(x)"]).unwrap();
+    /// t.chk("@x(x = x -> S(x) + 0 = S(x))");
+    /// ```
+    fn import_subst(self, boxes: &[Boxing], exprs: &[impl ToExpr+Clone]) -> Result<Self, TheoryError>;
 }
 
 pub fn peel_box_exact(a: &FormulaVars, boxes: &[Boxing]) -> Result<FormulaVars, TheoryError> {
@@ -221,6 +243,16 @@ impl TheoremBox for Theorem {
                 }
             }
         }
+    }
+
+    fn import_subst(self, boxes: &[Boxing], exprs: &[impl ToExpr+Clone]) -> Result<Self, TheoryError> {
+        let xs = just_vars(boxes);
+        let mut es = vec![];
+        for expr in exprs {
+            es.push(expr.clone().to_expr()?);
+        }
+        let t = self.subst_gen(&es, &xs)?;
+        install_hyps(t, boxes, &xs)
     }
 }
 
