@@ -3,7 +3,7 @@ use std::ops::Deref;
 use crate::gen::{peel_foralls, TheoremGen, TheoryError};
 use kernel::pa_axiom::Theorem;
 use kernel::pa_formula::{Formula, FormulaVars};
-use kernel::pa_parse::{ToFormula,ToExpr};
+use kernel::pa_parse::{ToExpr, ToFormula};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Boxing {
@@ -14,22 +14,18 @@ pub enum Boxing {
 pub trait TheoremBox: Sized {
     fn box_a1(a: impl ToFormula, b: impl ToFormula, boxes: &[Boxing]) -> Result<Self, TheoryError>;
     fn box_a2(
-        a: FormulaVars,
-        b: FormulaVars,
-        c: FormulaVars,
+        a: impl ToFormula,
+        b: impl ToFormula,
+        c: impl ToFormula,
         boxes: &[Boxing],
     ) -> Result<Self, TheoryError>;
     fn box_a4(
-        a: FormulaVars,
-        b: FormulaVars,
+        a: impl ToFormula,
+        b: impl ToFormula,
         x: &str,
         boxes: &[Boxing],
     ) -> Result<Self, TheoryError>;
-    fn box_a5(
-        a: FormulaVars,
-        x: &str,
-        boxes: &[Boxing],
-    ) -> Result<Self, TheoryError>;
+    fn box_a5(a: FormulaVars, x: &str, boxes: &[Boxing]) -> Result<Self, TheoryError>;
     fn box_mp(self, other: Self, boxes: &[Boxing]) -> Result<Self, TheoryError>;
     /// Take a formula from outside a box (or boxes) into a box.
     ///
@@ -72,7 +68,30 @@ pub trait TheoremBox: Sized {
     /// let t = aa1.import_subst(&boxes, &["S(x)"]).unwrap();
     /// t.chk("@x(x = x -> S(x) + 0 = S(x))");
     /// ```
-    fn import_subst(self, boxes: &[Boxing], exprs: &[impl ToExpr+Clone]) -> Result<Self, TheoryError>;
+    fn import_subst(
+        self,
+        boxes: &[Boxing],
+        exprs: &[impl ToExpr + Clone],
+    ) -> Result<Self, TheoryError>;
+
+    /// Prove that a formula implies itself, within some boxes.
+    ///
+    /// ```
+    /// use kernel::pa_axiom::Theorem;
+    /// use theory::boxing::{Boxes,TheoremBox};
+    ///
+    /// let mut boxes = Boxes::default();
+    /// boxes.push_var("x").unwrap();
+    /// boxes.push_var("y").unwrap();
+    ///
+    /// let t = Theorem::imp_self("x = y", &boxes).unwrap();
+    /// t.chk("@x(@y(x = y -> x = y))");
+    ///
+    /// boxes.push_hyp("x = 0").unwrap();
+    /// let t2 = Theorem::imp_self("y = 0", &boxes).unwrap();
+    /// t2.chk("@x(@y(x = 0 -> y = 0 -> y = 0))");
+    /// ```
+    fn imp_self(f: impl ToFormula, boxes: &[Boxing]) -> Result<Self, TheoryError>;
 }
 
 pub fn peel_box_exact(a: &FormulaVars, boxes: &[Boxing]) -> Result<FormulaVars, TheoryError> {
@@ -153,32 +172,28 @@ impl TheoremBox for Theorem {
     }
 
     fn box_a2(
-        a: FormulaVars,
-        b: FormulaVars,
-        c: FormulaVars,
+        a: impl ToFormula,
+        b: impl ToFormula,
+        c: impl ToFormula,
         boxes: &[Boxing],
     ) -> Result<Self, TheoryError> {
         let xs = just_vars(boxes);
-        let t = Theorem::a2(a, b, c, &xs)?;
+        let t = Theorem::a2(a.to_formula()?, b.to_formula()?, c.to_formula()?, &xs)?;
         install_hyps(t, boxes, &xs)
     }
 
     fn box_a4(
-        a: FormulaVars,
-        b: FormulaVars,
+        a: impl ToFormula,
+        b: impl ToFormula,
         x: &str,
         boxes: &[Boxing],
     ) -> Result<Self, TheoryError> {
         let xs = just_vars(boxes);
-        let t = Theorem::a4(a, b, x, &xs)?;
+        let t = Theorem::a4(a.to_formula()?, b.to_formula()?, x, &xs)?;
         install_hyps(t, boxes, &xs)
     }
 
-    fn box_a5(
-        a: FormulaVars,
-        x: &str,
-        boxes: &[Boxing],
-    ) -> Result<Self, TheoryError> {
+    fn box_a5(a: FormulaVars, x: &str, boxes: &[Boxing]) -> Result<Self, TheoryError> {
         let xs = just_vars(boxes);
         let t = Theorem::a5(a, x, &xs)?;
         install_hyps(t, boxes, &xs)
@@ -231,21 +246,25 @@ impl TheoremBox for Theorem {
             match &boxes[depth] {
                 Boxing::Var(x) => {
                     // self: ...f
-                    let t0 = Theorem::box_a5(f, x, &boxes[0..depth])?;   // ...(f -> @x(f))
-                    let t1 = t0.box_mp(self, &boxes[0..depth])?;         // ...@x(f)
+                    let t0 = Theorem::box_a5(f, x, &boxes[0..depth])?; // ...(f -> @x(f))
+                    let t1 = t0.box_mp(self, &boxes[0..depth])?; // ...@x(f)
                     t1.import(depth + 1, boxes)
                 }
                 Boxing::Hyp(h) => {
                     // self: ...f
-                    let t0 = Theorem::box_a1(f.clone(), h.clone(), &boxes[0..depth])?;   // ...(f -> (h -> f))
-                    let t1 = t0.box_mp(self, &boxes[0..depth])?;         // ...(h -> f)
+                    let t0 = Theorem::box_a1(f.clone(), h.clone(), &boxes[0..depth])?; // ...(f -> (h -> f))
+                    let t1 = t0.box_mp(self, &boxes[0..depth])?; // ...(h -> f)
                     t1.import(depth + 1, boxes)
                 }
             }
         }
     }
 
-    fn import_subst(self, boxes: &[Boxing], exprs: &[impl ToExpr+Clone]) -> Result<Self, TheoryError> {
+    fn import_subst(
+        self,
+        boxes: &[Boxing],
+        exprs: &[impl ToExpr + Clone],
+    ) -> Result<Self, TheoryError> {
         let xs = just_vars(boxes);
         let mut es = vec![];
         for expr in exprs {
@@ -254,9 +273,20 @@ impl TheoremBox for Theorem {
         let t = self.subst_gen(&es, &xs)?;
         install_hyps(t, boxes, &xs)
     }
+
+    fn imp_self(f: impl ToFormula, boxes: &[Boxing]) -> Result<Self, TheoryError> {
+        let a = f.to_formula()?;
+        let xs = just_vars(boxes);
+        let t1 = Theorem::a1(a.clone(), a.clone().imp(a.clone())?, &xs)?; // @... (x -> (x -> x) -> x)
+        let t2 = Theorem::a2(a.clone(), a.clone().imp(a.clone())?, a.clone(), &xs)?; // @... ((x -> (x -> x) -> x) -> (x -> (x -> x)) -> (x -> x) )
+        let t3 = t2.gen_mp(t1, xs.len())?; // @... ((x -> (x -> x)) -> (x -> x))
+        let t4 = Theorem::a1(a.clone(), a.clone(), &xs)?; // x -> (x -> x)
+        let t5 = t3.gen_mp(t4, xs.len())?; // @... (x -> x)
+        install_hyps(t5, boxes, &xs)
+    }
 }
 
-#[derive(Clone,Debug,Default,Eq,PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Boxes(Vec<Boxing>);
 
 impl Deref for Boxes {

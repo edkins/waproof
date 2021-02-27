@@ -1,6 +1,6 @@
 use kernel::pa_axiom::{Theorem, TheoremError};
 use kernel::pa_formula::{ExprVars, Formula, FormulaVars, SyntaxError};
-use kernel::pa_parse::{ParseError};
+use kernel::pa_parse::ParseError;
 
 #[derive(Debug)]
 pub enum TheoryError {
@@ -16,6 +16,7 @@ pub enum TheoryError {
     ComposeMismatch,
     ImportDepthTooGreat,
     NotAbsentGen(String),
+    NotEquality,
     NotForAll,
     NotForAllOrHyp,
     NotImp,
@@ -23,6 +24,7 @@ pub enum TheoryError {
     NotReorder(String),
     RenameInnerConflict(String),
     RenameOuterConflict(String),
+    StructuralMismatch,
     SubstNotInEnvironment(String),
     SubstInnerConflict(String),
     SubstOuterConflict(String),
@@ -152,7 +154,6 @@ fn rename_to_avoid(xs: &[String], avoid_lists: &[&[String]]) -> Vec<String> {
 }
 
 impl TheoremGen for Theorem {
-
     fn outer_rename(self, x: &str, y: &str) -> Result<Self, TheoryError> {
         if x == y {
             return Ok(self);

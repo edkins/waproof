@@ -1,6 +1,6 @@
 use crate::pa_axiom::Theorem;
 use crate::pa_convenience::num;
-use crate::pa_formula::{ExprVars, FormulaVars, SyntaxError};
+use crate::pa_formula::{Expr, ExprVars, Formula, FormulaVars, SyntaxError};
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while};
 use nom::character::complete::{digit1, multispace0, satisfy};
@@ -9,6 +9,7 @@ use nom::error::ErrorKind;
 use nom::sequence::{delimited, pair, preceded, terminated};
 use nom::IResult;
 use std::fmt::Debug;
+use std::rc::Rc;
 use std::str::FromStr;
 
 #[derive(Debug)]
@@ -252,6 +253,18 @@ impl ToFormula for &str {
     }
 }
 
+impl ToFormula for &Formula {
+    fn to_formula(self) -> Result<FormulaVars, ParseError> {
+        self.reconstitute().map_err(ParseError::Syntax)
+    }
+}
+
+impl ToFormula for &Rc<Formula> {
+    fn to_formula(self) -> Result<FormulaVars, ParseError> {
+        self.reconstitute().map_err(ParseError::Syntax)
+    }
+}
+
 pub trait ToExpr {
     fn to_expr(self) -> Result<ExprVars, ParseError>;
 }
@@ -271,6 +284,24 @@ impl ToExpr for &ExprVars {
 impl ToExpr for &str {
     fn to_expr(self) -> Result<ExprVars, ParseError> {
         self.parse()
+    }
+}
+
+impl ToExpr for Expr {
+    fn to_expr(self) -> Result<ExprVars, ParseError> {
+        Ok(self.reconstitute())
+    }
+}
+
+impl ToExpr for &Expr {
+    fn to_expr(self) -> Result<ExprVars, ParseError> {
+        Ok(self.reconstitute())
+    }
+}
+
+impl ToExpr for &Rc<Expr> {
+    fn to_expr(self) -> Result<ExprVars, ParseError> {
+        Ok(self.reconstitute())
     }
 }
 
