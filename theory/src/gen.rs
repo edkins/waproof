@@ -1,15 +1,20 @@
 use kernel::pa_axiom::{Theorem, TheoremError};
 use kernel::pa_formula::{ExprVars, Formula, FormulaVars, SyntaxError};
-use kernel::pa_parse::ParseError;
+use kernel::pa_parse::{ParseError};
 
 #[derive(Debug)]
 pub enum TheoryError {
     Syntax(SyntaxError),
     Axiom(TheoremError),
     Parse(ParseError),
+    BoxEmptyStack,
+    BoxVarConflict(String),
+    BoxHypBound(String),
+    BoxHypFree(String),
     BoxMismatch,
     CheckMismatch(String),
     ComposeMismatch,
+    ImportDepthTooGreat,
     NotAbsentGen(String),
     NotForAll,
     NotForAllOrHyp,
@@ -45,11 +50,6 @@ impl From<ParseError> for TheoryError {
 
 pub trait TheoremGen: Sized {
     fn absent_gen(self, gen: &[String]) -> Result<Self, TheoryError>;
-    fn checkr(&self, parseable: &str) -> Result<(), TheoryError>;
-    fn check(self, parseable: &str) -> Result<Self, TheoryError> {
-        self.checkr(parseable)?;
-        Ok(self)
-    }
     fn gen_mp(self, other: Self, count: usize) -> Result<Self, TheoryError>;
     fn outer_rename(self, x: &str, y: &str) -> Result<Self, TheoryError>;
     fn reorder_gen(self, xs: &[String]) -> Result<Self, TheoryError>;
@@ -152,13 +152,6 @@ fn rename_to_avoid(xs: &[String], avoid_lists: &[&[String]]) -> Vec<String> {
 }
 
 impl TheoremGen for Theorem {
-    fn checkr(&self, parseable: &str) -> Result<(), TheoryError> {
-        if parseable.parse::<FormulaVars>()? == *self.formula() {
-            Ok(())
-        } else {
-            Err(TheoryError::CheckMismatch(parseable.to_owned()))
-        }
-    }
 
     fn outer_rename(self, x: &str, y: &str) -> Result<Self, TheoryError> {
         if x == y {

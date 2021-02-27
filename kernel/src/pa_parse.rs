@@ -1,3 +1,4 @@
+use crate::pa_axiom::Theorem;
 use crate::pa_convenience::num;
 use crate::pa_formula::{ExprVars, FormulaVars, SyntaxError};
 use nom::branch::alt;
@@ -7,11 +8,13 @@ use nom::combinator::{all_consuming, opt, recognize, value};
 use nom::error::ErrorKind;
 use nom::sequence::{delimited, pair, preceded, terminated};
 use nom::IResult;
+use std::fmt::Debug;
 use std::str::FromStr;
 
 #[derive(Debug)]
 pub enum ParseError {
     Nom(ErrorKind, usize),
+    Check(String),
     Syntax(SyntaxError),
     NotAlphanumeric,
     NumberTooBig,
@@ -224,5 +227,45 @@ impl FromStr for FormulaVars {
         Ok(terminated(all_consuming(parse_formula), multispace0)(s)
             .map_err(extract_parse_error)?
             .1)
+    }
+}
+
+pub trait ToFormula {
+    fn to_formula(self) -> Result<FormulaVars, ParseError>;
+}
+
+impl ToFormula for FormulaVars {
+    fn to_formula(self) -> Result<FormulaVars, ParseError> {
+        Ok(self)
+    }
+}
+
+impl ToFormula for &FormulaVars {
+    fn to_formula(self) -> Result<FormulaVars, ParseError> {
+        Ok(self.clone())
+    }
+}
+
+impl ToFormula for &str {
+    fn to_formula(self) -> Result<FormulaVars, ParseError> {
+        self.parse()
+    }
+}
+
+impl Theorem {
+    pub fn checkr(&self, parseable: impl ToFormula + Clone + Debug) -> Result<(), ParseError> {
+        if parseable.clone().to_formula()? == *self.formula() {
+            Ok(())
+        } else {
+            Err(ParseError::Check(format!("{:?}", parseable)))
+        }
+    }
+
+    pub fn check(self, parseable: impl ToFormula + Clone + Debug) -> Result<Self, ParseError> {
+        self.checkr(parseable)?;
+        Ok(self)
+    }
+    pub fn chk(&self, parseable: impl ToFormula + Clone + Debug) {
+        self.checkr(parseable).expect("chk");
     }
 }
