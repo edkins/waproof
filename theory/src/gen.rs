@@ -22,6 +22,7 @@ pub enum TheoryError {
     NotImp,
     NotOuterVar(String),
     NotReorder(String),
+    PushingPastFreeVar(String),
     RenameInnerConflict(String),
     RenameOuterConflict(String),
     StructuralMismatch,
@@ -59,7 +60,7 @@ pub trait TheoremGen: Sized {
     fn subst_one(self, x: &str, e: ExprVars) -> Result<Self, TheoryError>;
 }
 
-fn peel_forall(a: &FormulaVars) -> Result<(String, FormulaVars), TheoryError> {
+pub fn peel_forall(a: &FormulaVars) -> Result<(String, FormulaVars), TheoryError> {
     if let Formula::ForAll(x, f) = a.formula() {
         Ok((x.to_owned(), f.reconstitute()?))
     } else {
@@ -102,7 +103,7 @@ fn peel_foralls_until(a: &FormulaVars, x: &str) -> Result<(Vec<String>, FormulaV
     Ok((vars, f.reconstitute()?))
 }
 
-fn check_expr_environment(e: &ExprVars, vars: &[String]) -> Result<(), TheoryError> {
+pub fn check_expr_environment(e: &ExprVars, vars: &[String]) -> Result<(), TheoryError> {
     for x in e.free() {
         if !vars.contains(x) {
             return Err(TheoryError::SubstNotInEnvironment(x.clone()));
@@ -137,7 +138,7 @@ fn incr(x: &str) -> String {
     result.chars().rev().collect()
 }
 
-fn rename_to_avoid(xs: &[String], avoid_lists: &[&[String]]) -> Vec<String> {
+pub fn rename_to_avoid(xs: &[String], avoid_lists: &[&[String]]) -> Vec<String> {
     let mut result = vec![];
     for x in xs {
         if avoid_lists.iter().any(|list| list.contains(x)) {

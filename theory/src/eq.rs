@@ -1,4 +1,4 @@
-use crate::boxing::{Boxing, TheoremBox, self};
+use crate::boxing::{self, Boxing, TheoremBox};
 use crate::gen::TheoryError;
 use kernel::pa_axiom::Theorem;
 use kernel::pa_formula::{Expr, Formula};
@@ -151,7 +151,7 @@ fn eq_subst_rec(
                     let t2 = t1.clone().import_subst(boxes, &[a, c, d])?; // (a = c) -> c = d -> a = d
                     let mut boxes_plus = boxes.to_vec();
                     boxes_plus.push(Boxing::Hyp(a.reconstitute().eq(c.reconstitute())));
-                    let tcd = cd.import(boxes.len(), &boxes_plus)?;  // (a = c) -> c = d
+                    let tcd = cd.import(boxes.len(), &boxes_plus)?; // (a = c) -> c = d
                     let t3 = t2.box_mp(tcd, &boxes_plus)?; // (a = c) -> a = d
                     let t4 = t1.import_subst(&boxes_plus, &[b, a, d])?; // (a = c) -> b = a -> a = d -> b = d
                     let ba = eq_subst_exp(b, a, equality, eq_left, eq_right, &boxes)?; // b = a
@@ -164,7 +164,7 @@ fn eq_subst_rec(
                     let mut boxes_plus = boxes.to_vec();
                     boxes_plus.push(Boxing::Hyp(a.reconstitute()?));
                     let cd = eq_subst_rec(c, d, equality, eq_left, eq_right, boxes)?; // (c -> d)
-                    let t0 = cd.import(boxes.len(), &boxes_plus)?;   // a -> (c -> d)
+                    let t0 = cd.import(boxes.len(), &boxes_plus)?; // a -> (c -> d)
                     let t1 = Theorem::box_a2(a, c, d, boxes)?; // (a -> (c -> d)) -> (a -> c) -> (b -> d)   because a == b
                     t1.box_mp(t0, &boxes)
                 } else if c == d {
@@ -184,10 +184,10 @@ fn eq_subst_rec(
                     let t3 = t2.box_mp(t1, &boxes_plus)?; // (a -> c) -> (b -> a) -> (b -> c)
                     let ba = eq_subst_rec(b, a, equality, eq_left, eq_right, boxes)?; // b -> a
                     let t4 = ba.import(boxes.len(), &boxes_plus)?; // (a -> c) -> (b -> a)
-                    let t5 = t3.box_mp(t4, &boxes_plus)?;  // (a -> c) -> b -> c
+                    let t5 = t3.box_mp(t4, &boxes_plus)?; // (a -> c) -> b -> c
                     let cd = eq_subst_rec(c, d, equality, eq_left, eq_right, boxes)?; // c -> d
                     boxes_plus.push(Boxing::Hyp(b.reconstitute()?));
-                    let t6 = cd.import(boxes.len(), &boxes_plus)?;  // (a -> c) -> b -> (c -> d)
+                    let t6 = cd.import(boxes.len(), &boxes_plus)?; // (a -> c) -> b -> (c -> d)
                     t6.box_mp(t5, &boxes_plus)
                 }
             }
@@ -196,8 +196,8 @@ fn eq_subst_rec(
                     let cd = eq_subst_rec(c, d, equality, eq_left, eq_right, boxes)?;
                     let mut boxes_plus = boxes.to_vec();
                     boxes_plus.push(Boxing::Var(x.clone()));
-                    let t0 = cd.import(boxes.len(), &boxes_plus)?;   // @x(c -> d)
-                    let t1 = Theorem::box_a4(c, d, x, boxes)?;       // @x(c -> d) -> @x(c) -> @x(d)
+                    let t0 = cd.import(boxes.len(), &boxes_plus)?; // @x(c -> d)
+                    let t1 = Theorem::box_a4(c, d, x, boxes)?; // @x(c -> d) -> @x(c) -> @x(d)
                     t1.box_mp(t0, &boxes)
                 } else {
                     Err(TheoryError::StructuralMismatch)
@@ -236,9 +236,9 @@ impl TheoremEq for Theorem {
 
 #[cfg(test)]
 mod test {
-    use kernel::pa_axiom::Theorem;
-    use crate::boxing::{Boxes,TheoremBox};
     use super::TheoremEq;
+    use crate::boxing::{Boxes, TheoremBox};
+    use kernel::pa_axiom::Theorem;
 
     #[test]
     fn s_eq_r() {
@@ -395,4 +395,3 @@ mod test {
         t1.chk("@x(x = 0 -> @y(0 + 0 = x))");
     }
 }
-
