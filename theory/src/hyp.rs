@@ -1,4 +1,5 @@
-use crate::gen::{self, TheoremGen, TheoryError};
+use crate::gen::{self, TheoremGen};
+use crate::util::TheoryError;
 use kernel::pa_axiom::Theorem;
 use kernel::pa_formula::{Formula, FormulaVars};
 

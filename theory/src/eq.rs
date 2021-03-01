@@ -1,5 +1,5 @@
 use crate::boxing::{self, Boxing, TheoremBox};
-use crate::gen::TheoryError;
+use crate::util::TheoryError;
 use kernel::pa_axiom::Theorem;
 use kernel::pa_formula::{Expr, Formula};
 use kernel::pa_parse::ToFormula;

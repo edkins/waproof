@@ -1,55 +1,6 @@
-use kernel::pa_axiom::{Theorem, TheoremError};
-use kernel::pa_formula::{ExprVars, Formula, FormulaVars, SyntaxError};
-use kernel::pa_parse::ParseError;
-
-#[derive(Debug)]
-pub enum TheoryError {
-    Syntax(SyntaxError),
-    Axiom(TheoremError),
-    Parse(ParseError),
-    BoxEmptyStack,
-    BoxVarConflict(String),
-    BoxHypBound(String),
-    BoxHypFree(String),
-    BoxMismatch,
-    CheckMismatch(String),
-    ComposeMismatch,
-    ImportDepthTooGreat,
-    NotAbsentGen(String),
-    NotEquality,
-    NotForAll,
-    NotForAllOrHyp,
-    NotImp,
-    NotOuterVar(String),
-    NotReorder(String),
-    PushingPastFreeVar(String),
-    RenameInnerConflict(String),
-    RenameOuterConflict(String),
-    StructuralMismatch,
-    SubstNotInEnvironment(String),
-    SubstInnerConflict(String),
-    SubstOuterConflict(String),
-    VarMismatch(String, String),
-    WrongHyp,
-}
-
-impl From<SyntaxError> for TheoryError {
-    fn from(e: SyntaxError) -> Self {
-        TheoryError::Syntax(e)
-    }
-}
-
-impl From<TheoremError> for TheoryError {
-    fn from(e: TheoremError) -> Self {
-        TheoryError::Axiom(e)
-    }
-}
-
-impl From<ParseError> for TheoryError {
-    fn from(e: ParseError) -> Self {
-        TheoryError::Parse(e)
-    }
-}
+use crate::util::TheoryError;
+use kernel::pa_axiom::Theorem;
+use kernel::pa_formula::{ExprVars, Formula, FormulaVars};
 
 pub trait TheoremGen: Sized {
     fn absent_gen(self, gen: &[String]) -> Result<Self, TheoryError>;

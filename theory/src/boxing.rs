@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 use std::ops::Deref;
 
-use crate::gen::{self, peel_foralls, TheoremGen, TheoryError};
+use crate::gen::{self, peel_foralls, TheoremGen};
+use crate::util::TheoryError;
 use kernel::pa_axiom::Theorem;
 use kernel::pa_formula::{ExprVars, Formula, FormulaVars};
 use kernel::pa_parse::{ToExpr, ToFormula};
