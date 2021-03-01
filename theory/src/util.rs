@@ -1,3 +1,4 @@
+use crate::boxing::Boxes;
 use kernel::pa_axiom::{Theorem, TheoremError};
 use kernel::pa_formula::SyntaxError;
 use kernel::pa_parse::ParseError;
@@ -57,11 +58,11 @@ pub struct Memo(RefCell<Option<Theorem>>);
 
 pub fn prove(
     result: &'static std::thread::LocalKey<Memo>,
-    func: impl Fn() -> Result<Theorem, TheoryError>,
+    func: impl FnOnce(Boxes) -> Result<Theorem, TheoryError>,
 ) -> Theorem {
     result.with(|r| {
         r.0.borrow_mut()
-            .get_or_insert_with(|| func().expect("proof failure"))
+            .get_or_insert_with(|| func(Boxes::default()).expect("proof failure"))
             .clone()
     })
 }

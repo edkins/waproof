@@ -4,7 +4,7 @@ use std::ops::Deref;
 use crate::gen::{self, peel_foralls, TheoremGen};
 use crate::util::TheoryError;
 use kernel::pa_axiom::Theorem;
-use kernel::pa_formula::{ExprVars, Formula, FormulaVars};
+use kernel::pa_formula::{Expr, ExprVars, Formula, FormulaVars};
 use kernel::pa_parse::{ToExpr, ToFormula};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -183,6 +183,27 @@ pub fn peel_box(a: &FormulaVars, depth: usize) -> Result<(Vec<Boxing>, FormulaVa
         }
     }
     Ok((boxes, f.reconstitute()?))
+}
+
+pub fn peel_box_until_eq(a: &FormulaVars) -> Result<(Vec<Boxing>, Expr, Expr), TheoryError> {
+    let mut boxes = vec![];
+    let mut f = a.formula();
+    loop {
+        match f {
+            Formula::ForAll(x, f2) => {
+                boxes.push(Boxing::Var(x.clone()));
+                f = f2;
+            }
+            Formula::Imp(f1, f2) => {
+                boxes.push(Boxing::Hyp(f1.reconstitute()?));
+                f = f2;
+            }
+            Formula::Eq(left, right) => {
+                return Ok((boxes, (**left).clone(), (**right).clone()));
+            }
+            _ => return Err(TheoryError::NotForAllOrHyp),
+        }
+    }
 }
 
 fn just_vars(boxes: &[Boxing]) -> Vec<String> {

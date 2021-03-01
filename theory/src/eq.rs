@@ -1,8 +1,9 @@
 use crate::boxing::{self, Boxing, TheoremBox};
+use crate::equalizer::Equalizer;
 use crate::util::TheoryError;
 use kernel::pa_axiom::Theorem;
 use kernel::pa_formula::{Expr, Formula};
-use kernel::pa_parse::ToFormula;
+use kernel::pa_parse::{ToExpr, ToFormula};
 
 pub trait TheoremEq: Sized {
     /// Try to prove `target`, by taking the current theorem and substituting things that
@@ -29,6 +30,9 @@ pub trait TheoremEq: Sized {
         target: impl ToFormula,
         boxes: &[Boxing],
     ) -> Result<Self, TheoryError>;
+
+    /// Assumes that self is a boxed equality. Aims to prove our RHS = target.
+    fn equals(self, target: impl ToExpr, equalizer: impl Equalizer) -> Result<Self, TheoryError>;
 }
 
 // Aim to prove left = right
@@ -231,6 +235,14 @@ impl TheoremEq for Theorem {
             boxes,
         )?
         .box_mp(self, boxes)
+    }
+
+    fn equals(self, target: impl ToExpr, equalizer: impl Equalizer) -> Result<Self, TheoryError> {
+        let (boxes, left, right) = boxing::peel_box_until_eq(&self.formula())?;
+        let target = target.to_expr()?.expr().clone();
+        let t1 = equalizer.prove_eq(&right, &target, &boxes)?;
+        let t2 = Theorem::ae3().import_subst(&boxes, &[left, right, target])?;
+        t2.box_mp(self, &boxes)?.box_mp(t1, &boxes)
     }
 }
 
