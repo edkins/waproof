@@ -13,6 +13,15 @@ pub enum Boxing {
     Hyp(FormulaVars),
 }
 
+impl Boxing {
+    pub fn is_var(&self) -> bool {
+        match self {
+            Boxing::Var(_) => true,
+            Boxing::Hyp(_) => false,
+        }
+    }
+}
+
 pub trait TheoremBox: Sized {
     fn box_a1(a: impl ToFormula, b: impl ToFormula, boxes: &[Boxing]) -> Result<Self, TheoryError>;
     fn box_a2(

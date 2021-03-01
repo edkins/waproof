@@ -40,14 +40,12 @@ pub fn add_0_l() -> Theorem {
         // Inductive step
         let ti = boxes
             .chain("0 + S(x)")?
-            .equals("S(0 + x)", add_succ_r().import_subst(&boxes, &["0", "x"])?)?
+            .equals("S(0 + x)", add_succ_r())?
             .equals("S(x)", ih)?;
         boxes.pop()?;
         boxes.pop()?;
 
-        let t0 = boxes
-            .chain("0 + 0")?
-            .equals("0", add_0_r().import_subst(&boxes, &["0"])?)?;
+        let t0 = boxes.chain("0 + 0")?.equals("0", add_0_r())?;
 
         ti.induction(t0, &boxes)
     })
@@ -71,23 +69,17 @@ pub fn add_succ_l() -> Theorem {
         // Inductive step
         let ti = boxes
             .chain("S(x) + S(y)")?
-            .equals(
-                "S(S(x) + y)",
-                add_succ_r().import_subst(&boxes, &["S(x)", "y"])?,
-            )?
+            .equals("S(S(x) + y)", add_succ_r())?
             .equals("S(S(x + y))", ih)?
-            .equals(
-                "S(x + S(y))",
-                add_succ_r().import_subst(&boxes, &["x", "y"])?,
-            )?;
+            .equals("S(x + S(y))", add_succ_r())?;
         boxes.pop()?;
         boxes.pop()?;
 
         // Base case
         let t0 = boxes
             .chain("S(x) + 0")?
-            .equals("S(x)", add_0_r().import_subst(&boxes, &["S(x)"])?)?
-            .equals("S(x + 0)", add_0_r().import_subst(&boxes, &["x"])?)?;
+            .equals("S(x)", add_0_r())?
+            .equals("S(x + 0)", add_0_r())?;
 
         ti.induction(t0, &boxes)
     })
@@ -111,9 +103,9 @@ pub fn add_comm() -> Theorem {
         // Inductive step
         let ti = boxes
             .chain("x + S(y)")?
-            .equals("S(x + y)", add_succ_r().import_subst(&boxes, &["x", "y"])?)?
+            .equals("S(x + y)", add_succ_r())?
             .equals("S(y + x)", ih)?
-            .equals("S(y) + x", add_succ_l().import_subst(&boxes, &["y", "x"])?)?;
+            .equals("S(y) + x", add_succ_l())?;
 
         boxes.pop()?;
         boxes.pop()?;
@@ -121,8 +113,8 @@ pub fn add_comm() -> Theorem {
         // Base case
         let t0 = boxes
             .chain("x + 0")?
-            .equals("x", add_0_r().import_subst(&boxes, &["x"])?)?
-            .equals("0 + x", add_0_l().import_subst(&boxes, &["x"])?)?;
+            .equals("x", add_0_r())?
+            .equals("0 + x", add_0_l())?;
 
         ti.induction(t0, &boxes)
     })

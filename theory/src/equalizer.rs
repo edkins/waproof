@@ -3,6 +3,7 @@ use crate::util::TheoryError;
 use kernel::pa_axiom::Theorem;
 use kernel::pa_formula::{Expr, Formula};
 use kernel::pa_parse::ToExpr;
+use std::collections::HashMap;
 
 pub trait Equalizer: Sized {
     fn prove_eq(&self, left: &Expr, right: &Expr, boxes: &[Boxing])
@@ -117,6 +118,93 @@ impl<E: Equalizer> Equalizer for SiteAdapt<E> {
     }
 }
 
+fn figure_out_substitutions(
+    map: &mut HashMap<String, Expr>,
+    before: &Expr,
+    after: &Expr,
+) -> Result<(), TheoryError> {
+    match (before, after) {
+        (Expr::Var(x), _) => {
+            if let Some(y) = map.get(x) {
+                if y == after {
+                    Ok(())
+                } else {
+                    Err(TheoryError::StructuralMismatch)
+                }
+            } else {
+                map.insert(x.clone(), after.clone());
+                Ok(())
+            }
+        }
+        (Expr::Z, Expr::Z) => Ok(()),
+        (Expr::S(x), Expr::S(y)) => figure_out_substitutions(map, &**x, &**y),
+        (Expr::Add(a, b), Expr::Add(c, d)) => {
+            figure_out_substitutions(map, &**a, &**c)?;
+            figure_out_substitutions(map, &**b, &**d)
+        }
+        (Expr::Mul(a, b), Expr::Mul(c, d)) => {
+            figure_out_substitutions(map, &**a, &**c)?;
+            figure_out_substitutions(map, &**b, &**d)
+        }
+        _ => Err(TheoryError::StructuralMismatch),
+    }
+}
+
+/// An equalizer which imports a particular theorem into the box context and
+/// provides appropriate substitutions for all of its variables.
+pub struct ImportSubst(pub Theorem);
+
+/// All of boxes must be vars, else panic.
+fn substitution_map_to_list(map: &HashMap<String, Expr>, boxes: &[Boxing]) -> Vec<Expr> {
+    boxes
+        .iter()
+        .map(|b| {
+            if let Boxing::Var(x) = b {
+                map.get(x).cloned().unwrap_or(Expr::Z)
+            } else {
+                panic!("Box is not a var");
+            }
+        })
+        .collect()
+}
+
+impl ImportSubst {
+    fn prove_eq_import_subst(
+        &self,
+        left: &Expr,
+        right: &Expr,
+        boxes: &[Boxing],
+    ) -> Result<Theorem, TheoryError> {
+        let (my_boxes, my_left, my_right) = boxing::peel_box_until_eq(self.0.formula())?;
+        if my_boxes.iter().all(Boxing::is_var) {
+            // We currently only handle substitution in the case where
+            // all the boxes are variables.
+            let mut map = HashMap::default();
+            figure_out_substitutions(&mut map, &my_left, left)?;
+            figure_out_substitutions(&mut map, &my_right, right)?;
+            let values = substitution_map_to_list(&map, &my_boxes);
+            self.0.clone().import_subst(boxes, &values)
+        } else {
+            Err(TheoryError::StructuralMismatch)
+        }
+    }
+}
+
+impl Equalizer for ImportSubst {
+    fn prove_eq(
+        &self,
+        left: &Expr,
+        right: &Expr,
+        boxes: &[Boxing],
+    ) -> Result<Theorem, TheoryError> {
+        self.prove_eq_import_subst(left, right, boxes).or_else(|_| {
+            // Fall back to no substitution, no import if all the boxes are correct (same behaviour
+            // as Exact)
+            Exact(self.0.clone()).prove_eq(left, right, boxes)
+        })
+    }
+}
+
 impl Boxes {
     pub fn chain(&self, expr: impl ToExpr + Clone) -> Result<Theorem, TheoryError> {
         Theorem::ae1().import_subst(self, &[expr])
@@ -130,9 +218,26 @@ impl Equalizer for Theorem {
         right: &Expr,
         boxes: &[Boxing],
     ) -> Result<Theorem, TheoryError> {
-        Exact(self.clone())
+        ImportSubst(self.clone())
             .sym()
             .site()
             .prove_eq(left, right, boxes)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::boxing::Boxes;
+    use crate::eq::TheoremEq;
+    use kernel::pa_axiom::Theorem;
+
+    #[test]
+    fn import_subst_0_plus_0() {
+        let t0 = Boxes::default()
+            .chain("0 + 0")
+            .unwrap()
+            .equals("0", Theorem::aa1())
+            .unwrap();
+        t0.chk("0 + 0 = 0");
     }
 }
