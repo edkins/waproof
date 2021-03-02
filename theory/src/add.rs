@@ -119,3 +119,119 @@ pub fn add_comm() -> Theorem {
         ti.induction(t0, &boxes)
     })
 }
+
+/// ```
+/// use theory::add::add_assoc;
+/// use theory::gen::TheoremGen;
+///
+/// add_assoc().chk("@x(@y(@z(x + (y + z) = (x + y) + z)))");
+/// ```
+pub fn add_assoc() -> Theorem {
+    thread_local! {
+        static RESULT: Memo = Memo::default();
+    }
+    prove(&RESULT, |mut boxes| {
+        boxes.push_var("x")?;
+        boxes.push_var("y")?;
+        boxes.push_var("z")?;
+        let ih = boxes.push_and_get("x + (y + z) = (x + y) + z")?;
+
+        // Inductive step
+        let ti = boxes
+            .chain("x + (y + S(z))")?
+            .equals("x + S(y + z)", add_succ_r())?
+            .equals("S(x + (y + z))", add_succ_r())?
+            .equals("S((x + y) + z)", ih)?
+            .equals("(x + y) + S(z)", add_succ_r())?;
+        boxes.pop()?;
+        boxes.pop()?;
+
+        // Base case
+        let t0 = boxes
+            .chain("x + (y + 0)")?
+            .equals("x + y", add_0_r())?
+            .equals("(x + y) + 0", add_0_r())?;
+
+        ti.induction(t0, &boxes)
+    })
+}
+
+/// ```
+/// use theory::add::succ_inj;
+/// use theory::gen::TheoremGen;
+///
+/// succ_inj().chk("@x(@y(S(x) = S(y) -> x = y))");
+/// ```
+pub fn succ_inj() -> Theorem {
+    Theorem::as2()
+}
+
+
+/// ```
+/// use theory::add::add_cancel_r;
+/// use theory::gen::TheoremGen;
+///
+/// add_cancel_r().chk("@x(@y(@z(x + z = y + z -> x = y)))");
+/// ```
+pub fn add_cancel_r() -> Theorem {
+    thread_local! {
+        static RESULT: Memo = Memo::default();
+    }
+    prove(&RESULT, |mut boxes| {
+        boxes.push_var("x")?;
+        boxes.push_var("y")?;
+        boxes.push_var("z")?;
+        let ih = boxes.push_and_get("x + z = y + z -> x = y")?;
+
+        // Inductive step
+        let t1 = boxes.push_and_get("x + S(z) = y + S(z)")?;
+        let t2 = boxes
+            .chain("S(x + z)")?
+            .equals("x + S(z)", add_succ_r())?
+            .equals("y + S(z)", t1)?
+            .equals("S(y + z)", add_succ_r())?;
+        let t3 = succ_inj().import_subst(&boxes, &["x + z", "y + z"])?;
+        let t4 = t3.box_mp(t2, &boxes)?;
+        t4.box_chk("x + z = y + z", &boxes);
+        let ti = ih.import(4, &boxes)?.box_mp(t4, &boxes)?;
+        boxes.pop()?;
+        boxes.pop()?;
+        boxes.pop()?;
+
+        // Base case
+        let t5 = boxes.push_and_get("x + 0 = y + 0")?;
+        let t0 = boxes
+            .chain("x")?
+            .equals("x + 0", add_0_r())?
+            .equals("y + 0", t5)?
+            .equals("y", add_0_r())?;
+        boxes.pop()?;
+
+        ti.induction(t0, &boxes)
+    })
+}
+
+/// ```
+/// use theory::add::add_cancel_l;
+/// use theory::gen::TheoremGen;
+///
+/// add_cancel_l().chk("@x(@y(@z(x + y = x + z -> y = z)))");
+/// ```
+pub fn add_cancel_l() -> Theorem {
+    thread_local! {
+        static RESULT: Memo = Memo::default();
+    }
+    prove(&RESULT, |mut boxes| {
+        boxes.push_var("x")?;
+        boxes.push_var("y")?;
+        boxes.push_var("z")?;
+        let t0 = boxes.push_and_get("x + y = x + z")?;
+        let t1 = boxes
+            .chain("y + x")?
+            .equals("x + y", add_comm())?
+            .equals("x + z", t0)?
+            .equals("z + x", add_comm())?;
+        let t2 = add_cancel_r().import_subst(&boxes, &["y","z","x"])?;
+        t2.box_mp(t1, &boxes)
+    })
+}
