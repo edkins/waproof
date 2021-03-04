@@ -1,17 +1,17 @@
 use crate::gen::{self, TheoremGen};
 use crate::util::TheoryError;
 use kernel::pa_axiom::Theorem;
-use kernel::pa_formula::{Formula, FormulaVars};
+use kernel::pa_formula::{Formula};
 
 pub trait TheoremHyp: Sized {
-    fn add_hyp(self, h: FormulaVars, depth: usize) -> Result<Self, TheoryError>;
+    fn add_hyp(self, h: Formula, depth: usize) -> Result<Self, TheoryError>;
     fn compose(self, other: Self, depth: usize) -> Result<Self, TheoryError>;
 }
 
-pub fn get_hyp(f: &Formula, depth: usize) -> Result<FormulaVars, TheoryError> {
+pub fn get_hyp(f: &Formula, depth: usize) -> Result<Formula, TheoryError> {
     if depth == 0 {
         match f {
-            Formula::Imp(h, _) => Ok(h.reconstitute()?),
+            Formula::Imp(h, _) => Ok((**h).clone()),
             _ => Err(TheoryError::NotImp),
         }
     } else {
@@ -22,10 +22,10 @@ pub fn get_hyp(f: &Formula, depth: usize) -> Result<FormulaVars, TheoryError> {
     }
 }
 
-pub fn get_conc(f: &Formula, depth: usize) -> Result<FormulaVars, TheoryError> {
+pub fn get_conc(f: &Formula, depth: usize) -> Result<Formula, TheoryError> {
     if depth == 0 {
         match f {
-            Formula::Imp(_, c) => Ok(c.reconstitute()?),
+            Formula::Imp(_, c) => Ok((**c).clone()),
             _ => Err(TheoryError::NotImp),
         }
     } else {
@@ -37,7 +37,7 @@ pub fn get_conc(f: &Formula, depth: usize) -> Result<FormulaVars, TheoryError> {
 }
 
 impl TheoremHyp for Theorem {
-    fn add_hyp(self, h: FormulaVars, depth: usize) -> Result<Self, TheoryError> {
+    fn add_hyp(self, h: Formula, depth: usize) -> Result<Self, TheoryError> {
         let (vars, a) = gen::peel_foralls(self.formula(), depth)?;
         // self: @v...A
         let aba = Theorem::a1(a, h, &vars)?; // @v...(A->(B->A))
@@ -53,10 +53,10 @@ impl TheoremHyp for Theorem {
             }
         }
 
-        let a = get_hyp(ab.formula(), 0)?;
-        let b0 = get_conc(ab.formula(), 0)?;
-        let b1 = get_hyp(bc.formula(), 0)?;
-        let c = get_conc(bc.formula(), 0)?;
+        let a = get_hyp(&ab, 0)?;
+        let b0 = get_conc(&ab, 0)?;
+        let b1 = get_hyp(&bc, 0)?;
+        let c = get_conc(&bc, 0)?;
         if b0 != b1 {
             return Err(TheoryError::ComposeMismatch);
         }

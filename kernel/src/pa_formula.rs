@@ -63,26 +63,37 @@ pub struct FormulaVars {
     bound: Vec<String>,
 }
 
-fn merge_lists(mut a: Vec<String>, mut b: Vec<String>) -> Vec<String> {
-    for x in b.drain(..) {
-        if !a.contains(&x) {
-            a.push(x);
+impl Expr {
+    pub fn var(x: &str) -> Self {
+        Expr::Var(x.to_owned())
+    }
+
+    pub fn z() -> Self {
+        Expr::Z
+    }
+
+    pub fn s(self) -> Self {
+        Expr::S(Rc::new(self))
+    }
+
+    pub fn add(self, other: Self) -> Self {
+        Expr::Add(Rc::new(self), Rc::new(other))
+    }
+
+    pub fn mul(self, other: Self) -> Self {
+        Expr::Mul(Rc::new(self), Rc::new(other))
+    }
+
+    pub fn eq(self, other: Self) -> Formula {
+        Formula::Eq(Rc::new(self), Rc::new(other))
+    }
+
+    pub fn reconstitute(&self) -> ExprVars {
+        ExprVars {
+            e: Rc::new(self.clone()),
+            free: self.free(),
         }
     }
-    a
-}
-
-fn list_remove(mut a: Vec<String>, x: &str) -> Vec<String> {
-    a.drain(..).filter(|y| y != x).collect()
-}
-
-fn list_intersect(a: &[String], b: &[String]) -> Option<String> {
-    for x in a {
-        if b.contains(x) {
-            return Some(x.clone());
-        }
-    }
-    None
 }
 
 impl ExprVars {
@@ -93,48 +104,32 @@ impl ExprVars {
     pub fn free(&self) -> &[String] {
         &self.free
     }
+}
 
-    pub fn var(x: &str) -> Self {
-        ExprVars {
-            e: Rc::new(Expr::Var(x.to_owned())),
-            free: vec![x.to_owned()],
-        }
+impl Formula {
+    pub fn reconstitute(&self) -> Result<FormulaVars, SyntaxError> {
+        let (bound, free) = self.check_vars()?;
+        Ok(FormulaVars {
+            f: Rc::new(self.clone()),
+            bound,
+            free
+        })
     }
 
-    pub fn z() -> Self {
-        ExprVars {
-            e: Rc::new(Expr::Z),
-            free: vec![],
-        }
+    pub fn falsehood() -> Self {
+        Formula::False
     }
 
-    pub fn s(self) -> Self {
-        ExprVars {
-            e: Rc::new(Expr::S(self.e)),
-            free: self.free,
-        }
+    pub fn imp(self, other: Self) -> Self {
+        Formula::Imp(Rc::new(self), Rc::new(other))
     }
 
-    pub fn add(self, other: Self) -> Self {
-        ExprVars {
-            e: Rc::new(Expr::Add(self.e, other.e)),
-            free: merge_lists(self.free, other.free),
-        }
+    pub fn forall(self, x: &str) -> Self {
+        Formula::ForAll(x.to_owned(), Rc::new(self))
     }
 
-    pub fn mul(self, other: Self) -> Self {
-        ExprVars {
-            e: Rc::new(Expr::Mul(self.e, other.e)),
-            free: merge_lists(self.free, other.free),
-        }
-    }
-
-    pub fn eq(self, other: Self) -> FormulaVars {
-        FormulaVars {
-            f: Rc::new(Formula::Eq(self.e, other.e)),
-            free: merge_lists(self.free, other.free),
-            bound: vec![],
-        }
+    pub fn memo(self) -> Result<Self, SyntaxError> {
+        Ok(Formula::Memo(self.reconstitute()?))
     }
 }
 
@@ -149,85 +144,5 @@ impl FormulaVars {
 
     pub fn bound(&self) -> &[String] {
         &self.bound
-    }
-
-    pub fn falsehood() -> Self {
-        FormulaVars {
-            f: Rc::new(Formula::False),
-            free: vec![],
-            bound: vec![],
-        }
-    }
-
-    pub fn imp(self, other: Self) -> Result<Self, SyntaxError> {
-        let free = merge_lists(self.free, other.free);
-        let bound = merge_lists(self.bound, other.bound);
-        if let Some(x) = list_intersect(&free, &bound) {
-            return Err(SyntaxError::MixingFreeAndBound(x));
-        }
-        Ok(FormulaVars {
-            f: Rc::new(Formula::Imp(self.f, other.f)),
-            free,
-            bound,
-        })
-    }
-
-    pub fn forall(self, x: &str) -> Result<Self, SyntaxError> {
-        if self.bound.iter().any(|y| y == x) {
-            return Err(SyntaxError::BoundTwice(x.to_owned()));
-        }
-        let free = list_remove(self.free, x);
-        let mut bound = self.bound;
-        bound.push(x.to_owned());
-        Ok(FormulaVars {
-            f: Rc::new(Formula::ForAll(x.to_owned(), self.f)),
-            free,
-            bound,
-        })
-    }
-
-    pub fn memo(self) -> Self {
-        let free = self.free.clone();
-        let bound = self.bound.clone();
-        FormulaVars {
-            f: Rc::new(Formula::Memo(self)),
-            free,
-            bound,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::ExprVars;
-
-    #[test]
-    fn forall_different_vars_ok() {
-        let _ = ExprVars::var("x")
-            .eq(ExprVars::var("y"))
-            .forall("x")
-            .unwrap()
-            .forall("y")
-            .unwrap();
-    }
-
-    #[test]
-    fn forall_same_var_not_ok() {
-        assert!(ExprVars::var("x")
-            .eq(ExprVars::var("y"))
-            .forall("x")
-            .unwrap()
-            .forall("x")
-            .is_err());
-    }
-
-    #[test]
-    fn mixing_bound_unbound_not_ok() {
-        let f = ExprVars::var("x")
-            .eq(ExprVars::var("x"))
-            .forall("x")
-            .unwrap();
-        let g = ExprVars::var("x").eq(ExprVars::var("x"));
-        assert!(f.imp(g).is_err());
     }
 }

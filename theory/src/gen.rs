@@ -1,61 +1,61 @@
 use crate::util::TheoryError;
 use kernel::pa_axiom::Theorem;
-use kernel::pa_formula::{ExprVars, Formula, FormulaVars};
+use kernel::pa_formula::{Expr, Formula};
 
 pub trait TheoremGen: Sized {
     fn absent_gen(self, gen: &[String]) -> Result<Self, TheoryError>;
     fn gen_mp(self, other: Self, count: usize) -> Result<Self, TheoryError>;
     fn outer_rename(self, x: &str, y: &str) -> Result<Self, TheoryError>;
     fn reorder_gen(self, xs: &[String]) -> Result<Self, TheoryError>;
-    fn subst_gen(self, es: &[ExprVars], gen: &[String]) -> Result<Self, TheoryError>;
-    fn subst_one(self, x: &str, e: ExprVars) -> Result<Self, TheoryError>;
+    fn subst_gen(self, es: &[Expr], gen: &[String]) -> Result<Self, TheoryError>;
+    fn subst_one(self, x: &str, e: Expr) -> Result<Self, TheoryError>;
 }
 
-pub fn peel_forall(a: &FormulaVars) -> Result<(String, FormulaVars), TheoryError> {
-    if let Formula::ForAll(x, f) = a.formula() {
-        Ok((x.to_owned(), f.reconstitute()?))
+pub fn peel_forall(a: &Formula) -> Result<(String, Formula), TheoryError> {
+    if let Formula::ForAll(x, f) = a {
+        Ok((x.to_owned(), (**f).clone()))
     } else {
         Err(TheoryError::NotForAll)
     }
 }
 
 pub fn peel_foralls(
-    a: &FormulaVars,
+    a: &Formula,
     count: usize,
-) -> Result<(Vec<String>, FormulaVars), TheoryError> {
+) -> Result<(Vec<String>, Formula), TheoryError> {
     let mut vars = vec![];
-    let mut f = a.formula();
+    let mut f = a.clone();
     for _ in 0..count {
         if let Formula::ForAll(x, f2) = f {
             vars.push(x.to_owned());
-            f = f2;
+            f = (*f2).clone();
         } else {
             return Err(TheoryError::NotForAll);
         }
     }
-    Ok((vars, f.reconstitute()?))
+    Ok((vars, f))
 }
 
-fn peel_foralls_until(a: &FormulaVars, x: &str) -> Result<(Vec<String>, FormulaVars), TheoryError> {
+fn peel_foralls_until(a: &Formula, x: &str) -> Result<(Vec<String>, Formula), TheoryError> {
     let mut vars = vec![];
-    let mut f = a.formula();
+    let mut f = a.clone();
     loop {
-        if let Formula::ForAll(y, f2) = f {
+        if let Formula::ForAll(y, f2) = f.clone() {
             if y == x {
                 break;
             } else {
-                f = f2;
+                f = (*f2).clone();
                 vars.push(y.to_owned());
             }
         } else {
             return Err(TheoryError::NotOuterVar(x.to_owned()));
         }
     }
-    Ok((vars, f.reconstitute()?))
+    Ok((vars, f))
 }
 
-pub fn check_expr_environment(e: &ExprVars, vars: &[String]) -> Result<(), TheoryError> {
-    for x in e.free() {
+pub fn check_expr_environment(e: &Expr, vars: &[String]) -> Result<(), TheoryError> {
+    for x in &e.free() {
         if !vars.contains(x) {
             return Err(TheoryError::SubstNotInEnvironment(x.clone()));
         }
@@ -117,7 +117,7 @@ impl TheoremGen for Theorem {
         if vars.iter().any(|y| y == x) {
             return Err(TheoryError::RenameOuterConflict(x.to_owned()));
         }
-        if f.has_bound(x) {
+        if f.has_bound(x)? {
             return Err(TheoryError::RenameInnerConflict(x.to_owned()));
         }
 
@@ -125,11 +125,11 @@ impl TheoremGen for Theorem {
         let t1 = Theorem::a5(xf, y, &vars)?.gen_mp(self, vars.len())?; // @v...@y(@x(f[x]))
 
         vars.push(y.to_owned());
-        let t2 = Theorem::a6(f, x, ExprVars::var(y), &vars)?;
+        let t2 = Theorem::a6(f, x, Expr::var(y), &vars)?;
         Ok(t2.gen_mp(t1, vars.len())?) // @v...@y(f[y])
     }
 
-    fn subst_one(self, x: &str, e: ExprVars) -> Result<Self, TheoryError> {
+    fn subst_one(self, x: &str, e: Expr) -> Result<Self, TheoryError> {
         let (vars, xf) = peel_foralls_until(self.formula(), x)?;
         let (_, f) = peel_forall(&xf)?;
 
@@ -145,8 +145,9 @@ impl TheoremGen for Theorem {
     }
 
     fn absent_gen(mut self, gen: &[String]) -> Result<Self, TheoryError> {
+        let bounds = self.formula().bound()?;
         for x in gen.iter().rev() {
-            if self.formula().has_bound(x) {
+            if bounds.contains(x) {
                 return Err(TheoryError::NotAbsentGen(x.clone()));
             }
             self = Theorem::a5(self.formula().clone(), x, &[])?.mp(self)?;
@@ -154,21 +155,21 @@ impl TheoremGen for Theorem {
         Ok(self)
     }
 
-    fn subst_gen(mut self, es: &[ExprVars], gen: &[String]) -> Result<Self, TheoryError> {
+    fn subst_gen(mut self, es: &[Expr], gen: &[String]) -> Result<Self, TheoryError> {
         for expr in es {
             check_expr_environment(&expr, gen)?;
         }
 
         let (orig_vars, f) = peel_foralls(self.formula(), es.len())?;
 
-        for y in f.bound() {
+        for y in &f.bound()? {
             if gen.contains(y) {
                 return Err(TheoryError::SubstInnerConflict(y.clone()));
             }
         }
 
         // @o...(f[o...])
-        let vars = rename_to_avoid(&orig_vars, &[f.bound(), &gen]);
+        let vars = rename_to_avoid(&orig_vars, &[&f.bound()?, &gen]);
         for i in 0..vars.len() {
             self = self.outer_rename(&orig_vars[i], &vars[i])?;
         }
@@ -198,18 +199,18 @@ impl TheoremGen for Theorem {
             if x != y {
                 return Err(TheoryError::VarMismatch(x, y));
             }
-            let b = match ab.formula() {
+            let b = match &ab {
                 Formula::Imp(h, af) => {
-                    if **h != *a.formula() {
+                    if **h != a {
                         return Err(TheoryError::WrongHyp);
                     }
-                    af.reconstitute()?
+                    af
                 }
                 _ => return Err(TheoryError::NotImp),
             };
             // self: @xs...@x(a->b)
             // other: @xs...@x(a)
-            let t0 = Theorem::a4(a, b, &x, &xs)?; // @xs...(@x(a->b)->(@x(a)->@x(b)))
+            let t0 = Theorem::a4(a, (**b).clone(), &x, &xs)?; // @xs...(@x(a->b)->(@x(a)->@x(b)))
             let t1 = t0.gen_mp(self, count - 1)?;
             let t2 = t1.gen_mp(other, count - 1)?;
             Ok(t2)
@@ -229,7 +230,7 @@ impl TheoremGen for Theorem {
             }
         }
 
-        let exprs: Vec<_> = vars.iter().map(|x| ExprVars::var(x)).collect();
+        let exprs: Vec<_> = vars.iter().map(|x| Expr::var(x)).collect();
         self.subst_gen(&exprs, xs)
     }
 }
@@ -239,13 +240,13 @@ mod test {
     use super::{incr, TheoremGen};
     use kernel::pa_axiom::Theorem;
     use kernel::pa_convenience::num;
-    use kernel::pa_formula::{ExprVars, FormulaVars};
+    use kernel::pa_formula::{Expr, Formula};
 
     #[test]
     fn outer_rename_same() {
         let t = Theorem::aa2(); // @x(@y(x + S(y) = S(x + y)))
         let t1 = t.outer_rename("x", "x").unwrap();
-        let e: FormulaVars = "@x(@y(x + S(y) = S(x + y)))".parse().unwrap();
+        let e: Formula = "@x(@y(x + S(y) = S(x + y)))".parse().unwrap();
         assert_eq!(e, *t1.formula());
     }
 
@@ -253,7 +254,7 @@ mod test {
     fn outer_rename_1() {
         let t = Theorem::aa2(); // @x(@y(x + S(y) = S(x + y)))
         let t1 = t.outer_rename("x", "x1").unwrap();
-        let e: FormulaVars = "@x1(@y(x1 + S(y) = S(x1 + y)))".parse().unwrap();
+        let e: Formula = "@x1(@y(x1 + S(y) = S(x1 + y)))".parse().unwrap();
         assert_eq!(e, *t1.formula());
     }
 
@@ -261,7 +262,7 @@ mod test {
     fn outer_rename_2() {
         let t = Theorem::aa2(); // @x(@y(x + S(y) = S(x + y)))
         let t1 = t.outer_rename("y", "y1").unwrap();
-        let e: FormulaVars = "@x(@y1(x + S(y1) = S(x + y1)))".parse().unwrap();
+        let e: Formula = "@x(@y1(x + S(y1) = S(x + y1)))".parse().unwrap();
         assert_eq!(e, *t1.formula());
     }
 
@@ -269,7 +270,7 @@ mod test {
     fn outer_rename_3() {
         let t = Theorem::aea1(); // @x(@y(@z(x = y -> x + z = y + z)))
         let t1 = t.outer_rename("z", "w").unwrap();
-        let e: FormulaVars = "@x(@y(@w(x = y -> x + w = y + w)))".parse().unwrap();
+        let e: Formula = "@x(@y(@w(x = y -> x + w = y + w)))".parse().unwrap();
         assert_eq!(e, *t1.formula());
     }
 
@@ -375,14 +376,14 @@ mod test {
     #[test]
     fn subst_gen_x_x() {
         let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
-        let t1 = t.subst_gen(&[ExprVars::var("x")], &v(&["x"])).unwrap();
+        let t1 = t.subst_gen(&[Expr::var("x")], &v(&["x"])).unwrap();
         t1.check("@x(x + 0 = x)").unwrap();
     }
 
     #[test]
     fn subst_gen_x_y() {
         let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
-        let t1 = t.subst_gen(&[ExprVars::var("y")], &v(&["y"])).unwrap();
+        let t1 = t.subst_gen(&[Expr::var("y")], &v(&["y"])).unwrap();
         t1.check("@y(y + 0 = y)").unwrap();
     }
 
@@ -412,7 +413,7 @@ mod test {
         let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
         let t1 = t
             .subst_gen(
-                &[ExprVars::var("y").add(ExprVars::var("z"))],
+                &[Expr::var("y").add(Expr::var("z"))],
                 &v(&["z", "y"]),
             )
             .unwrap();
@@ -430,7 +431,7 @@ mod test {
     fn subst_gen_xy_yx1() {
         let t = Theorem::aa2().check("@x(@y(x + S(y) = S(x + y)))").unwrap();
         let t1 = t
-            .subst_gen(&[ExprVars::var("y"), ExprVars::var("x")], &v(&["x", "y"]))
+            .subst_gen(&[Expr::var("y"), Expr::var("x")], &v(&["x", "y"]))
             .unwrap();
         t1.check("@x(@y(y + S(x) = S(y + x)))").unwrap();
     }
@@ -439,7 +440,7 @@ mod test {
     fn subst_gen_xy_yx2() {
         let t = Theorem::aa2().check("@x(@y(x + S(y) = S(x + y)))").unwrap();
         let t1 = t
-            .subst_gen(&[ExprVars::var("y"), ExprVars::var("x")], &v(&["y", "x"]))
+            .subst_gen(&[Expr::var("y"), Expr::var("x")], &v(&["y", "x"]))
             .unwrap();
         t1.check("@y(@x(y + S(x) = S(y + x)))").unwrap();
     }
@@ -448,7 +449,7 @@ mod test {
     fn subst_gen_xy_xx() {
         let t = Theorem::aa2().check("@x(@y(x + S(y) = S(x + y)))").unwrap();
         let t1 = t
-            .subst_gen(&[ExprVars::var("x"), ExprVars::var("x")], &v(&["x"]))
+            .subst_gen(&[Expr::var("x"), Expr::var("x")], &v(&["x"]))
             .unwrap();
         t1.check("@x(x + S(x) = S(x + x))").unwrap();
     }
@@ -461,7 +462,7 @@ mod test {
             .unwrap();
         let t2 = t1
             .subst_gen(
-                &[ExprVars::var("x").add(num(0)), ExprVars::var("x"), num(0)],
+                &[Expr::var("x").add(num(0)), Expr::var("x"), num(0)],
                 &v(&["x"]),
             )
             .unwrap();
@@ -484,7 +485,7 @@ mod test {
             .unwrap();
         let t2 = t1
             .subst_gen(
-                &[ExprVars::var("x").add(num(0)), ExprVars::var("x")],
+                &[Expr::var("x").add(num(0)), Expr::var("x")],
                 &v(&["x"]),
             )
             .unwrap()

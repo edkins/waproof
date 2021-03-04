@@ -51,8 +51,8 @@ impl Equalizer for Exact {
         right: &Expr,
         boxes: &[Boxing],
     ) -> Result<Theorem, TheoryError> {
-        if let Formula::Eq(a, b) = boxing::peel_box_exact(self.0.formula(), boxes)?.formula() {
-            if *left == **a && *right == **b {
+        if let Formula::Eq(a, b) = boxing::peel_box_exact(self.0.formula(), boxes)? {
+            if *left == *a && *right == *b {
                 return Ok(self.0.clone());
             }
         }

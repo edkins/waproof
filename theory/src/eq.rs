@@ -146,7 +146,7 @@ fn eq_subst_rec(
                     let t1 = Theorem::ae3(); // @x(@y(@z(x = y -> y = z -> x = z)))
                     let t2 = t1.import_subst(boxes, &[a, c, d])?; // a = c -> c = d -> b = d      because a == b
                     let mut boxes_plus = boxes.to_vec();
-                    boxes_plus.push(Boxing::Hyp(a.reconstitute().eq(c.reconstitute())));
+                    boxes_plus.push(Boxing::Hyp((**a).clone().eq((**c).clone())));
                     let t3 = cd.import(boxes.len(), &boxes_plus)?; // a = c -> c = d
                     t2.box_mp(t3, &boxes_plus)
                 } else {
@@ -154,7 +154,7 @@ fn eq_subst_rec(
                     let t1 = Theorem::ae3(); // @x(@y(@z(x = y -> y = z -> x = z)))
                     let t2 = t1.clone().import_subst(boxes, &[a, c, d])?; // (a = c) -> c = d -> a = d
                     let mut boxes_plus = boxes.to_vec();
-                    boxes_plus.push(Boxing::Hyp(a.reconstitute().eq(c.reconstitute())));
+                    boxes_plus.push(Boxing::Hyp((**a).clone().eq((**c).clone())));
                     let tcd = cd.import(boxes.len(), &boxes_plus)?; // (a = c) -> c = d
                     let t3 = t2.box_mp(tcd, &boxes_plus)?; // (a = c) -> a = d
                     let t4 = t1.import_subst(&boxes_plus, &[b, a, d])?; // (a = c) -> b = a -> a = d -> b = d
@@ -166,7 +166,7 @@ fn eq_subst_rec(
             (Formula::Imp(a, c), Formula::Imp(b, d)) => {
                 if a == b {
                     let mut boxes_plus = boxes.to_vec();
-                    boxes_plus.push(Boxing::Hyp(a.reconstitute()?));
+                    boxes_plus.push(Boxing::Hyp((**a).clone()));
                     let cd = eq_subst_rec(c, d, equality, eq_left, eq_right, boxes)?; // (c -> d)
                     let t0 = cd.import(boxes.len(), &boxes_plus)?; // a -> (c -> d)
                     let t1 = Theorem::box_a2(a, c, d, boxes)?; // (a -> (c -> d)) -> (a -> c) -> (b -> d)   because a == b
@@ -174,7 +174,7 @@ fn eq_subst_rec(
                 } else if c == d {
                     let t1 = Theorem::box_a1(source, b, boxes)?; // (a -> c) -> (b -> a -> c)
                     let mut boxes_plus = boxes.to_vec();
-                    boxes_plus.push(Boxing::Hyp(source.reconstitute()?));
+                    boxes_plus.push(Boxing::Hyp(source.clone()));
                     let t2 = Theorem::box_a2(b, a, c, &boxes_plus)?; // (a -> c) -> (b -> a -> c) -> (b -> a) -> (b -> d)  because c == d
                     let t3 = t2.box_mp(t1, &boxes_plus)?; // (a -> c) -> (b -> a) -> (b -> d)
                     let ba = eq_subst_rec(b, a, equality, eq_left, eq_right, boxes)?; // b -> a
@@ -183,14 +183,14 @@ fn eq_subst_rec(
                 } else {
                     let t1 = Theorem::box_a1(source, b, boxes)?; // (a -> c) -> (b -> a -> c)
                     let mut boxes_plus = boxes.to_vec();
-                    boxes_plus.push(Boxing::Hyp(source.reconstitute()?));
+                    boxes_plus.push(Boxing::Hyp((*source).clone()));
                     let t2 = Theorem::box_a2(b, a, c, &boxes_plus)?; // (a -> c) -> (b -> a -> c) -> (b -> a) -> (b -> c)
                     let t3 = t2.box_mp(t1, &boxes_plus)?; // (a -> c) -> (b -> a) -> (b -> c)
                     let ba = eq_subst_rec(b, a, equality, eq_left, eq_right, boxes)?; // b -> a
                     let t4 = ba.import(boxes.len(), &boxes_plus)?; // (a -> c) -> (b -> a)
                     let t5 = t3.box_mp(t4, &boxes_plus)?; // (a -> c) -> b -> c
                     let cd = eq_subst_rec(c, d, equality, eq_left, eq_right, boxes)?; // c -> d
-                    boxes_plus.push(Boxing::Hyp(b.reconstitute()?));
+                    boxes_plus.push(Boxing::Hyp((**b).clone()));
                     let t6 = cd.import(boxes.len(), &boxes_plus)?; // (a -> c) -> b -> (c -> d)
                     t6.box_mp(t5, &boxes_plus)
                 }
@@ -222,13 +222,13 @@ impl TheoremEq for Theorem {
         let eqf = boxing::peel_box_exact(equality.formula(), boxes)?;
         let sourcef = boxing::peel_box_exact(self.formula(), boxes)?;
         let targetf = target.to_formula()?;
-        let (eq_left, eq_right) = match eqf.formula() {
+        let (eq_left, eq_right) = match eqf {
             Formula::Eq(a, b) => (a, b),
             _ => return Err(TheoryError::NotEquality),
         };
         eq_subst_rec(
-            sourcef.formula(),
-            targetf.formula(),
+            &sourcef,
+            &targetf,
             &equality,
             &*eq_left,
             &*eq_right,
@@ -239,7 +239,7 @@ impl TheoremEq for Theorem {
 
     fn equals(self, target: impl ToExpr, equalizer: impl Equalizer) -> Result<Self, TheoryError> {
         let (boxes, left, right) = boxing::peel_box_until_eq(&self.formula())?;
-        let target = target.to_expr()?.expr().clone();
+        let target = target.to_expr()?.clone();
         let t1 = equalizer.prove_eq(&right, &target, &boxes)?;
         let t2 = Theorem::ae3().import_subst(&boxes, &[left, right, target])?;
         t2.box_mp(self, &boxes)?.box_mp(t1, &boxes)
