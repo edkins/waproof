@@ -4,29 +4,32 @@ use crate::eq::TheoremEq;
 use crate::util::{prove, Memo};
 use kernel::pa_axiom::Theorem;
 
-/// ```
-/// use theory::mul::mul_0_r;
-///
-/// mul_0_r().check("@x(x * 0 = 0)").unwrap();
-/// ```
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+
+    #[test]
+    fn test_mul() {
+        mul_0_r().chk("@x(x * 0 = 0)");
+        mul_succ_r().chk("@x(@y(x * S(y) = x * y + x))");
+        mul_0_l().chk("@x(0 * x = 0)");
+        mul_succ_l().chk("@x(@y(S(x) * y = x * y + y))");
+        mul_comm().chk("@x(@y(x * y = y * x))");
+        mul_add_distr_l().chk("@x(@y(@z((x + y) * z = x * z + y * z)))");
+        mul_add_distr_r().chk("@x(@y(@z(x * (y + z) = x * y + x * z)))");
+        mul_assoc().chk("@x(@y(@z(x * (y * z) = (x * y) * z)))");
+    }
+}
+
 pub fn mul_0_r() -> Theorem {
     Theorem::am1()
 }
 
-/// ```
-/// use theory::mul::mul_succ_r;
-///
-/// mul_succ_r().check("@x(@y(x * S(y) = x * y + x))").unwrap();
-/// ```
 pub fn mul_succ_r() -> Theorem {
     Theorem::am2()
 }
 
-/// ```
-/// use theory::mul::mul_0_l;
-///
-/// mul_0_l().chk("@x(0 * x = 0)");
-/// ```
 pub fn mul_0_l() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
@@ -50,11 +53,6 @@ pub fn mul_0_l() -> Theorem {
     })
 }
 
-/// ```
-/// use theory::mul::mul_succ_l;
-///
-/// mul_succ_l().chk("@x(@y(S(x) * y = x * y + y))");
-/// ```
 pub fn mul_succ_l() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
@@ -89,11 +87,6 @@ pub fn mul_succ_l() -> Theorem {
     })
 }
 
-/// ```
-/// use theory::mul::mul_comm;
-///
-/// mul_comm().chk("@x(@y(x * y = y * x))");
-/// ```
 pub fn mul_comm() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
@@ -119,11 +112,6 @@ pub fn mul_comm() -> Theorem {
     })
 }
 
-/// ```
-/// use theory::mul::mul_add_distr_l;
-///
-/// mul_add_distr_l().chk("@x(@y(@z((x + y) * z = x * z + y * z)))");
-/// ```
 pub fn mul_add_distr_l() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
@@ -158,11 +146,6 @@ pub fn mul_add_distr_l() -> Theorem {
     })
 }
 
-/// ```
-/// use theory::mul::mul_add_distr_r;
-///
-/// mul_add_distr_r().chk("@x(@y(@z(x * (y + z) = x * y + x * z)))");
-/// ```
 pub fn mul_add_distr_r() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
@@ -179,11 +162,6 @@ pub fn mul_add_distr_r() -> Theorem {
     })
 }
 
-/// ```
-/// use theory::mul::mul_assoc;
-///
-/// mul_assoc().chk("@x(@y(@z(x * (y * z) = (x * y) * z)))");
-/// ```
 pub fn mul_assoc() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();

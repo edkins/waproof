@@ -3,32 +3,32 @@ use crate::eq::TheoremEq;
 use crate::util::{prove, Memo};
 use kernel::pa_axiom::Theorem;
 
-/// ```
-/// use theory::add::add_0_r;
-/// use theory::gen::TheoremGen;
-///
-/// add_0_r().check("@x(x + 0 = x)").unwrap();
-/// ```
+#[cfg(test)]
+pub mod test {
+    use super::*;
+
+    #[test]
+    fn test_add() {
+        add_0_r().chk("@x(x + 0 = x)");
+        add_succ_r().chk("@x(@y(x + S(y) = S(x + y)))");
+        add_0_l().chk("@x(0 + x = x)");
+        add_succ_l().chk("@x(@y(S(x) + y = S(x + y)))");
+        add_comm().chk("@x(@y(x + y = y + x))");
+        add_assoc().chk("@x(@y(@z(x + (y + z) = (x + y) + z)))");
+        succ_inj().chk("@x(@y(S(x) = S(y) -> x = y))");
+        add_cancel_r().chk("@x(@y(@z(x + z = y + z -> x = y)))");
+        add_cancel_l().chk("@x(@y(@z(x + y = x + z -> y = z)))");
+    }
+}
+
 pub fn add_0_r() -> Theorem {
     Theorem::aa1()
 }
 
-/// ```
-/// use theory::add::add_succ_r;
-/// use theory::gen::TheoremGen;
-///
-/// add_succ_r().check("@x(@y(x + S(y) = S(x + y)))").unwrap();
-/// ```
 pub fn add_succ_r() -> Theorem {
     Theorem::aa2()
 }
 
-/// ```
-/// use theory::add::add_0_l;
-/// use theory::gen::TheoremGen;
-///
-/// add_0_l().chk("@x(0 + x = x)");
-/// ```
 pub fn add_0_l() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
@@ -51,12 +51,6 @@ pub fn add_0_l() -> Theorem {
     })
 }
 
-/// ```
-/// use theory::add::add_succ_l;
-/// use theory::gen::TheoremGen;
-///
-/// add_succ_l().chk("@x(@y(S(x) + y = S(x + y)))");
-/// ```
 pub fn add_succ_l() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
@@ -85,12 +79,6 @@ pub fn add_succ_l() -> Theorem {
     })
 }
 
-/// ```
-/// use theory::add::add_comm;
-/// use theory::gen::TheoremGen;
-///
-/// add_comm().chk("@x(@y(x + y = y + x))");
-/// ```
 pub fn add_comm() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
@@ -120,12 +108,6 @@ pub fn add_comm() -> Theorem {
     })
 }
 
-/// ```
-/// use theory::add::add_assoc;
-/// use theory::gen::TheoremGen;
-///
-/// add_assoc().chk("@x(@y(@z(x + (y + z) = (x + y) + z)))");
-/// ```
 pub fn add_assoc() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
@@ -156,23 +138,11 @@ pub fn add_assoc() -> Theorem {
     })
 }
 
-/// ```
-/// use theory::add::succ_inj;
-/// use theory::gen::TheoremGen;
-///
-/// succ_inj().chk("@x(@y(S(x) = S(y) -> x = y))");
-/// ```
 pub fn succ_inj() -> Theorem {
     Theorem::as2()
 }
 
 
-/// ```
-/// use theory::add::add_cancel_r;
-/// use theory::gen::TheoremGen;
-///
-/// add_cancel_r().chk("@x(@y(@z(x + z = y + z -> x = y)))");
-/// ```
 pub fn add_cancel_r() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
@@ -211,12 +181,6 @@ pub fn add_cancel_r() -> Theorem {
     })
 }
 
-/// ```
-/// use theory::add::add_cancel_l;
-/// use theory::gen::TheoremGen;
-///
-/// add_cancel_l().chk("@x(@y(@z(x + y = x + z -> y = z)))");
-/// ```
 pub fn add_cancel_l() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
