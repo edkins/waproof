@@ -37,6 +37,10 @@ impl From<SyntaxError> for ParseError {
     }
 }
 
+fn syn(e: SyntaxError) -> nom::Err<ParseError> {
+    nom::Err::Error(ParseError::Syntax(e))
+}
+
 fn extract_parse_error(e: nom::Err<ParseError>) -> ParseError {
     match e {
         nom::Err::Incomplete(_) => ParseError::Incomplete,
@@ -172,14 +176,14 @@ fn parse_forall(input: &str) -> IResult<&str, Formula, ParseError> {
     let (input, _) = parse_sym("@")(input)?;
     let (input, x) = parse_var_str(input)?;
     let (input, f) = delimited(parse_sym("("), parse_formula, parse_sym(")"))(input)?;
-    Ok((input, f.forall(x)))
+    Ok((input, f.forall(x).map_err(syn)?))
 }
 
 fn parse_exists(input: &str) -> IResult<&str, Formula, ParseError> {
     let (input, _) = parse_sym("#")(input)?;
     let (input, x) = parse_var_str(input)?;
     let (input, f) = delimited(parse_sym("("), parse_formula, parse_sym(")"))(input)?;
-    Ok((input, f.exists(x)))
+    Ok((input, f.exists(x).map_err(syn)?))
 }
 
 fn parse_tight(input: &str) -> IResult<&str, Formula, ParseError> {
@@ -198,7 +202,7 @@ fn parse_imps(input: &str) -> IResult<&str, Formula, ParseError> {
     let (input, mb) = opt(preceded(parse_sym("->"), parse_imps))(input)?;
     let r = match mb {
         None => a,
-        Some(b) => a.imp(b),
+        Some(b) => a.imp(b).map_err(syn)?,
     };
     Ok((input, r))
 }
@@ -208,7 +212,7 @@ fn parse_ands(input: &str) -> IResult<&str, Formula, ParseError> {
     let (input, mb) = opt(preceded(parse_sym("&"), parse_ands))(input)?;
     let r = match mb {
         None => a,
-        Some(b) => a.and(b),
+        Some(b) => a.and(b).map_err(syn)?,
     };
     Ok((input, r))
 }
@@ -218,7 +222,7 @@ fn parse_formula(input: &str) -> IResult<&str, Formula, ParseError> {
     let (input, mb) = opt(preceded(parse_sym("|"), parse_formula))(input)?;
     let r = match mb {
         None => a,
-        Some(b) => a.or(b),
+        Some(b) => a.or(b).map_err(syn)?,
     };
     Ok((input, r))
 }
@@ -230,7 +234,6 @@ impl FromStr for Formula {
         let result = terminated(all_consuming(parse_formula), multispace0)(s)
             .map_err(extract_parse_error)?
             .1;
-        result.sane()?;
         Ok(result)
     }
 }

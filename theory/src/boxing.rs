@@ -120,34 +120,6 @@ pub trait TheoremBox: Sized {
     ///
     /// self is ...@x(H[x] -> H[S(x)]
     /// base is ...H[0]
-    ///
-    /// ```
-    /// use kernel::pa_axiom::Theorem;
-    /// use theory::boxing::{Boxes,TheoremBox};
-    /// use theory::eq::TheoremEq;
-    ///
-    /// let mut boxes = Boxes::default();
-    /// boxes.push_var("x").unwrap();
-    /// let eq = boxes.push_and_get("x = 0").unwrap();
-    ///
-    /// boxes.push_var("y");
-    /// let ih = boxes.push_and_get("x + y = y").unwrap();
-    /// let t0 = Theorem::aa2().import_subst(&boxes, &["x","y"]).unwrap();
-    /// t0.box_chk("x + S(y) = S(x + y)", &boxes);
-    /// let t1 = t0.eq_subst(ih, "x + S(y) = S(y)", &boxes).unwrap();
-    /// boxes.pop().unwrap();
-    /// boxes.pop().unwrap();
-    ///
-    /// let t2 = Theorem::aa1().import_subst(&boxes, &["0"]).unwrap();
-    /// t2.box_chk("0 + 0 = 0", &boxes);
-    /// let t3 = t2.eq_subst(eq, "x + 0 = 0", &boxes).unwrap();
-    ///
-    /// t1.box_chk("@y(x + y = y -> x + S(y) = S(y))", &boxes);
-    /// t3.box_chk("x + 0 = 0", &boxes);
-    ///
-    /// let t4 = t1.induction(t3, &boxes).unwrap();
-    /// t4.chk("@x(x = 0 -> @y(x + y = y))");
-    /// ```
     fn induction(self, base: Self, boxes: &[Boxing]) -> Result<Self, TheoryError>;
 
     fn push_forall(self, boxes: &[Boxing], extra_depth: usize) -> Result<Self, TheoryError>;
@@ -156,21 +128,22 @@ pub trait TheoremBox: Sized {
 pub fn peel_box_exact(a: &Formula, boxes: &[Boxing]) -> Result<Formula, TheoryError> {
     let mut f = a.clone();
     for b in boxes {
-        match &f {
-            Formula::ForAll(x, f2) => {
-                if *b != Boxing::Var(x.clone()) {
+        f = f.cases(
+            || Err(TheoryError::NotForAllOrHyp),
+            |_,_| Err(TheoryError::NotForAllOrHyp),
+            |f1, f2| {
+                if *b != Boxing::Hyp(f1.clone()) {
                     return Err(TheoryError::BoxMismatch);
                 }
-                f = (**f2).clone();
-            }
-            Formula::Imp(f1, f2) => {
-                if *b != Boxing::Hyp((**f1).clone()) {
+                Ok(f2)
+            },
+            |x, f2| {
+                if *b != Boxing::Var(x.to_owned()) {
                     return Err(TheoryError::BoxMismatch);
                 }
-                f = (**f2).clone();
+                Ok(f2)
             }
-            _ => return Err(TheoryError::NotForAllOrHyp),
-        }
+        )?.clone();
     }
     Ok(f)
 }
@@ -179,14 +152,14 @@ pub fn peel_box(a: &Formula, depth: usize) -> Result<(Vec<Boxing>, Formula), The
     let mut boxes = vec![];
     let mut f = a.clone();
     for _ in 0..depth {
-        match f {
-            Formula::ForAll(x, f2) => {
-                boxes.push(Boxing::Var(x.clone()));
-                f = (*f2).clone();
+        match f_as_enum(&f) {
+            FormulaRef::Imp(f1, f2) => {
+                boxes.push(Boxing::Hyp(f1.clone()));
+                f = f2.clone();
             }
-            Formula::Imp(f1, f2) => {
-                boxes.push(Boxing::Hyp((*f1).clone()));
-                f = (*f2).clone();
+            FormulaRef::ForAll(x, f2) => {
+                boxes.push(Boxing::Var(x.to_owned()));
+                f = f2.clone();
             }
             _ => return Err(TheoryError::NotForAllOrHyp),
         }
@@ -194,23 +167,39 @@ pub fn peel_box(a: &Formula, depth: usize) -> Result<(Vec<Boxing>, Formula), The
     Ok((boxes, f))
 }
 
+pub enum FormulaRef<'a> {
+    False,
+    Eq(&'a Expr, &'a Expr),
+    Imp(&'a Formula, &'a Formula),
+    ForAll(&'a str, &'a Formula),
+}
+
+pub fn f_as_enum<'a>(f: &'a Formula) -> FormulaRef<'a> {
+    f.cases(
+        || FormulaRef::False,
+        FormulaRef::Eq,
+        FormulaRef::Imp,
+        FormulaRef::ForAll
+    )
+}
+
 pub fn peel_box_until_eq(a: &Formula) -> Result<(Vec<Boxing>, Expr, Expr), TheoryError> {
     let mut boxes = vec![];
     let mut f = a.clone();
     loop {
-        match f {
-            Formula::ForAll(x, f2) => {
-                boxes.push(Boxing::Var(x.clone()));
-                f = (*f2).clone();
+        match f_as_enum(&f) {
+            FormulaRef::False => return Err(TheoryError::NotForAllOrHyp),
+            FormulaRef::Eq(left, right) => {
+                return Ok((boxes, left.clone(), right.clone()));
             }
-            Formula::Imp(f1, f2) => {
-                boxes.push(Boxing::Hyp((*f1).clone()));
-                f = (*f2).clone();
+            FormulaRef::Imp(f1, f2) => {
+                boxes.push(Boxing::Hyp(f1.clone()));
+                f = f2.clone();
             }
-            Formula::Eq(left, right) => {
-                return Ok((boxes, (*left).clone(), (*right).clone()));
+            FormulaRef::ForAll(x, f2) => {
+                boxes.push(Boxing::Var(x.to_owned()));
+                f = f2.clone();
             }
-            _ => return Err(TheoryError::NotForAllOrHyp),
         }
     }
 }
@@ -296,15 +285,10 @@ impl TheoremBox for Theorem {
         } else {
             let ab = peel_box_exact(self.formula(), boxes)?;
             let a = peel_box_exact(other.formula(), boxes)?;
-            let b = match &ab {
-                Formula::Imp(h, af) => {
-                    if **h != a {
-                        return Err(TheoryError::WrongHyp);
-                    }
-                    af
-                }
-                _ => return Err(TheoryError::NotImp),
-            };
+            let (h, b) = gen::expect_imp(&ab)?;
+            if *h != a {
+                return Err(TheoryError::WrongHyp);
+            }
 
             match &boxes[boxes.len() - 1] {
                 Boxing::Var(x) => {
@@ -335,10 +319,7 @@ impl TheoremBox for Theorem {
             if &all_boxes[0..boxes.len()] != boxes {
                 return Err(TheoryError::BoxMismatch);
             }
-            let (a, b) = match &ab {
-                Formula::Imp(h, af) => (h, af),
-                _ => return Err(TheoryError::NotImp),
-            };
+            let (a, b) = gen::expect_imp(&ab)?;
             let most_boxes = &all_boxes[0..all_boxes.len() - 1];
             match &all_boxes[all_boxes.len() - 1] {
                 Boxing::Var(x) => {
@@ -398,8 +379,8 @@ impl TheoremBox for Theorem {
     fn imp_self(f: impl ToFormula, boxes: &[Boxing]) -> Result<Self, TheoryError> {
         let a = f.to_formula()?;
         let xs = just_vars(boxes);
-        let t1 = Theorem::a1(a.clone(), a.clone().imp(a.clone()), &xs)?; // @... (x -> (x -> x) -> x)
-        let t2 = Theorem::a2(a.clone(), a.clone().imp(a.clone()), a.clone(), &xs)?; // @... ((x -> (x -> x) -> x) -> (x -> (x -> x)) -> (x -> x) )
+        let t1 = Theorem::a1(a.clone(), a.clone().imp(a.clone())?, &xs)?; // @... (x -> (x -> x) -> x)
+        let t2 = Theorem::a2(a.clone(), a.clone().imp(a.clone())?, a.clone(), &xs)?; // @... ((x -> (x -> x) -> x) -> (x -> (x -> x)) -> (x -> x) )
         let t3 = t2.gen_mp(t1, xs.len())?; // @... ((x -> (x -> x)) -> (x -> x))
         let t4 = Theorem::a1(a.clone(), a.clone(), &xs)?; // x -> (x -> x)
         let t5 = t3.gen_mp(t4, xs.len())?; // @... (x -> x)
@@ -425,36 +406,30 @@ impl TheoremBox for Theorem {
 
     fn induction(self, base: Self, boxes: &[Boxing]) -> Result<Self, TheoryError> {
         let forall = peel_box_exact(self.formula(), boxes)?;
-        if let Formula::ForAll(x, hx_hsx) = &forall {
-            if let Formula::Imp(hx, _) = &**hx_hsx {
-                if boxes.is_empty() {
-                    Ok(Theorem::aind((**hx).clone(), &x, &[])?
-                        .mp(base)?
-                        .mp(self)?)
-                } else {
-                    // self: ....@x(H[x] -> H[S(x)])
-                    let y =
-                        gen::rename_to_avoid(&[x.clone()], &[&self.formula().bound()?])[0].clone();
-                    let t0 = self.subst_gen(&[], &[y.clone()])?; // @y...@x(H[x] -> H[S(x)])
-                    let mut yboxes = vec![Boxing::Var(y.clone())];
-                    yboxes.extend_from_slice(boxes);
-                    let t1 = t0.box_subst_one(&yboxes, Expr::var(&y))?; // @y...(H[y] -> H[S(y)])
-                    let t2 = t1.cleave(&yboxes[0..1], yboxes.len() - 1)?; // @y(...H[y] -> ...H[S(y)])
-
-                    let boxed_hy =
-                        boxed_formula(&boxes, hx.subst(x, &Expr::var(&y))?)?;
-                    let t3 = Theorem::aind(boxed_hy, &y, &[])?.mp(base)?.mp(t2)?; // @y(...H[y])
-                    let t4 = t3.push_forall(&[], boxes.len())?; // ...@y(H[y])
-                    let mut boxes_x = boxes.to_vec();
-                    boxes_x.push(Boxing::Var(x.clone()));
-                    let t5 = t4.import(boxes.len(), &boxes_x)?; // ...@x(@y(H[y]))
-                    t5.box_subst_one(&boxes_x, Expr::var(x)) // ...@x(H[x])
-                }
-            } else {
-                Err(TheoryError::NotImp)
-            }
+        let (x, hx_hsx) = gen::expect_forall(&forall)?;
+        let (hx, _) = gen::expect_imp(hx_hsx)?;
+        if boxes.is_empty() {
+            Ok(Theorem::aind(hx.clone(), &x, &[])?
+                .mp(base)?
+                .mp(self)?)
         } else {
-            Err(TheoryError::NotForAll)
+            // self: ....@x(H[x] -> H[S(x)])
+            let y =
+                gen::rename_to_avoid(&[x.to_owned()], &[&self.formula().bound().slice()])[0].clone();
+            let t0 = self.subst_gen(&[], &[y.clone()])?; // @y...@x(H[x] -> H[S(x)])
+            let mut yboxes = vec![Boxing::Var(y.clone())];
+            yboxes.extend_from_slice(boxes);
+            let t1 = t0.box_subst_one(&yboxes, Expr::var(&y))?; // @y...(H[y] -> H[S(y)])
+            let t2 = t1.cleave(&yboxes[0..1], yboxes.len() - 1)?; // @y(...H[y] -> ...H[S(y)])
+
+            let boxed_hy =
+                boxed_formula(&boxes, hx.subst(x, &Expr::var(&y))?)?;
+            let t3 = Theorem::aind(boxed_hy, &y, &[])?.mp(base)?.mp(t2)?; // @y(...H[y])
+            let t4 = t3.push_forall(&[], boxes.len())?; // ...@y(H[y])
+            let mut boxes_x = boxes.to_vec();
+            boxes_x.push(Boxing::Var(x.to_owned()));
+            let t5 = t4.import(boxes.len(), &boxes_x)?; // ...@x(@y(H[y]))
+            t5.box_subst_one(&boxes_x, Expr::var(x)) // ...@x(H[x])
         }
     }
 
@@ -476,7 +451,7 @@ impl TheoremBox for Theorem {
         match &boxes2[boxes.len() + 1] {
             Boxing::Var(y) => {
                 // self: ...@x(@y(f[y]))
-                let y2 = gen::rename_to_avoid(&[y.clone()], &[&f.free()?, &f.bound()?])[0].clone();
+                let y2 = gen::rename_to_avoid(&[y.clone()], &[f.free().slice(), f.bound().slice()])[0].clone();
                 let mut boxes_y2 = boxes.to_vec();
                 boxes_y2.push(Boxing::Var(y2.clone()));
                 let t0 = self.import(boxes.len(), &boxes_y2)?; // ...@y2(@x(@y(f[y])))
@@ -484,7 +459,7 @@ impl TheoremBox for Theorem {
                 boxes_y2_x.push(Boxing::Var(x.clone()));
                 let t1 = Theorem::box_a6(f.clone(), y, Expr::var(&y2), &boxes_y2_x)?; // ...@y2(@x(@y(f[y]) -> f[y2]))
                 let t2 = t1.box_mp(t0, &boxes_y2_x)?; // ...@y2(@x(f[y2]))
-                let x_fy2 = f.subst(y, &Expr::var(&y2))?.forall(x);
+                let x_fy2 = f.subst(y, &Expr::var(&y2))?.forall(x)?;
                 let mut boxes_y = boxes.to_vec();
                 boxes_y.push(Boxing::Var(y.clone()));
                 let t3 = t2.import(boxes.len(), &boxes_y)?; // ...@y(@y2(@x(f[y2])))
@@ -493,7 +468,7 @@ impl TheoremBox for Theorem {
                 t5.push_forall(&boxes_y, extra_depth - 1)
             }
             Boxing::Hyp(h) => {
-                if h.free()?.contains(x) {
+                if h.free().contains(x) {
                     return Err(TheoryError::PushingPastFreeVar(x.clone()));
                 }
                 // self: ...@x(h -> f)
@@ -510,20 +485,18 @@ impl TheoremBox for Theorem {
     fn hyp_syllogism(self, other: Self, boxes: &[Boxing]) -> Result<Self, TheoryError> {
         let ab = peel_box_exact(self.formula(), boxes)?;
         let bc = peel_box_exact(other.formula(), boxes)?;
-        if let (Formula::Imp(a, b), Formula::Imp(b2, c)) = (ab, bc) {
-            if b != b2 {
-                return Err(TheoryError::WrongHyp);
-            }
-            // self: ...(a -> b)
-            // other: ...(b -> c)
-            let mut boxes_plus = boxes.to_vec();
-            boxes_plus.push(Boxing::Hyp((*a).clone()));
-            let t0 = other.import(boxes.len(), &boxes_plus)?; // ...(a -> b -> c)
-            let t1 = Theorem::box_a2(a, b, c, boxes)?; // ...((a -> b -> c) -> (a -> b) -> (a -> c))
-            t1.box_mp(t0, boxes)?.box_mp(self, boxes)
-        } else {
-            Err(TheoryError::NotImp)
+        let (a,b) = gen::expect_imp(&ab)?;
+        let (b2,c) = gen::expect_imp(&bc)?;
+        if b != b2 {
+            return Err(TheoryError::WrongHyp);
         }
+        // self: ...(a -> b)
+        // other: ...(b -> c)
+        let mut boxes_plus = boxes.to_vec();
+        boxes_plus.push(Boxing::Hyp((*a).clone()));
+        let t0 = other.import(boxes.len(), &boxes_plus)?; // ...(a -> b -> c)
+        let t1 = Theorem::box_a2(a, b, c, boxes)?; // ...((a -> b -> c) -> (a -> b) -> (a -> c))
+        t1.box_mp(t0, boxes)?.box_mp(self, boxes)
     }
 
     fn box_chk(&self, parseable: impl ToFormula + Clone + Debug, boxes: &[Boxing]) {
@@ -539,10 +512,10 @@ pub fn boxed_formula(boxes: &[Boxing], f: impl ToFormula) -> Result<Formula, The
     for b in boxes.iter().rev() {
         match b {
             Boxing::Var(x) => {
-                formula = formula.forall(x);
+                formula = formula.forall(x)?;
             }
             Boxing::Hyp(h) => {
-                formula = h.clone().imp(formula);
+                formula = h.clone().imp(formula)?;
             }
         }
     }
@@ -639,13 +612,12 @@ impl Boxes {
     pub fn push_hyp(&mut self, hyp: impl ToFormula) -> Result<(), TheoryError> {
         let f = hyp.to_formula()?;
         let bounds = self.bound();
-        let (fbound, ffree) = f.check_vars()?;
-        for x in &fbound {
+        for x in f.bound().slice() {
             if bounds.contains(x) {
                 return Err(TheoryError::BoxHypBound(x.clone()));
             }
         }
-        for x in &ffree {
+        for x in f.free().slice() {
             if !bounds.contains(x) {
                 return Err(TheoryError::BoxHypFree(x.clone()));
             }

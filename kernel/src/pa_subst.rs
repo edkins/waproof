@@ -1,40 +1,48 @@
 use crate::pa_formula::{Expr, Formula, SyntaxError};
 
 impl Expr {
-    pub fn subst(&self, x: &str, value: &Expr) -> Expr{
-        match self {
-            Expr::Var(y) => {
+    pub fn subst(&self, x: &str, value: &Expr) -> Expr {
+        if !self.has_free(x) {
+            return self.clone();
+        }
+        self.cases(
+            |y| {
                 if y == x {
                     value.clone()
                 } else {
                     Expr::var(y)
                 }
-            }
-            Expr::Z => Expr::z(),
-            Expr::S(e) => e.subst(x, value).s(),
-            Expr::Add(a, b) => a.subst(x, value).add(b.subst(x, value)),
-            Expr::Mul(a, b) => a.subst(x, value).mul(b.subst(x, value)),
-        }
+            },
+            || Expr::z(),
+            |a| a.subst(x, value).s(),
+            |a, b| a.subst(x, value).add(b.subst(x, value)),
+            |a, b| a.subst(x, value).mul(b.subst(x, value)),
+        )
     }
 }
 
 impl Formula {
     pub fn subst(&self, x: &str, value: &Expr) -> Result<Formula, SyntaxError> {
-        Ok(match self {
-            Formula::False => Formula::falsehood(),
-            Formula::Eq(a, b) => a.subst(x, value).eq(b.subst(x, value)),
-            Formula::Imp(p, q) => p.subst(x, value)?.imp(q.subst(x, value)?),
-            Formula::ForAll(y, p) => {
+        if self.has_bound(x) {
+            return Err(SyntaxError::SubstBoundVar(x.to_owned()));
+        }
+        if !self.has_free(x) {
+            return Ok(self.clone());
+        }
+        self.cases(
+            || Ok(Formula::falsehood()),
+            |a, b| Ok(a.subst(x, value).eq(b.subst(x, value))),
+            |p, q| p.subst(x, value)?.imp(q.subst(x, value)?),
+            |y, p| {
                 if x == y {
-                    return Err(SyntaxError::SubstBoundVar(y.clone()));
+                    return Err(SyntaxError::SubstBoundVar(y.to_owned()));
                 }
                 if value.has_free(y) {
-                    return Err(SyntaxError::SubstForBoundVar(y.clone()));
+                    return Err(SyntaxError::SubstForBoundVar(y.to_owned()));
                 }
                 p.subst(x, value)?.forall(&y)
-            }
-            Formula::Memo(m) => m.formula().subst(x, value)?.memo()?,
-        })
+            },
+        )
     }
 }
 
@@ -90,19 +98,15 @@ mod tests {
 
     #[test]
     fn simple_formula_subst_forall() {
-        let f = Expr::var("x")
-            .eq(Expr::var("y"))
-            .forall("y");
+        let f = Expr::var("x").eq(Expr::var("y")).forall("y").unwrap();
         let g = f.subst("x", &Expr::z()).unwrap();
-        let expected = Expr::z().eq(Expr::var("y")).forall("y");
+        let expected = Expr::z().eq(Expr::var("y")).forall("y").unwrap();
         assert_eq!(expected, g);
     }
 
     #[test]
     fn simple_formula_subst_forall_invalid() {
-        let f = Expr::var("x")
-            .eq(Expr::var("y"))
-            .forall("x");
+        let f = Expr::var("x").eq(Expr::var("y")).forall("x").unwrap();
         let g = f.subst("x", &Expr::z());
         assert!(g.is_err());
     }

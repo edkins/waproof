@@ -1,40 +1,40 @@
-use crate::boxing::{self, Boxing, TheoremBox};
+use crate::boxing::{self, TheoremBox};
 use crate::equalizer::Equalizer;
 use crate::util::TheoryError;
 use kernel::pa_axiom::Theorem;
-use kernel::pa_formula::{Expr, Formula};
-use kernel::pa_parse::{ToExpr, ToFormula};
+use kernel::pa_parse::{ToExpr};
 
 pub trait TheoremEq: Sized {
-    /// Try to prove `target`, by taking the current theorem and substituting things that
-    /// are equal. Operates inside a box, i.e. the equality might be conditional on some
-    /// hypotheses.
-    ///
-    /// `target` does not include the boxed stuff.
-    ///
-    /// ```
-    /// use kernel::pa_axiom::Theorem;
-    /// use theory::boxing::TheoremBox;
-    /// use theory::eq::TheoremEq;
-    ///
-    /// let t0 = Theorem::aa1().import_subst(&[], &["0"]).unwrap();
-    /// t0.chk("0 + 0 = 0");
-    /// let t1 = Theorem::as1().import_subst(&[], &["0"]).unwrap();
-    /// t1.chk("!(0 = S(0))");
-    /// let t2 = t1.eq_subst(t0, "!(0 = S(0+0))", &[]).unwrap();
-    /// t2.chk("!(0 = S(0+0))");
-    /// ```
-    fn eq_subst(
+    // Try to prove `target`, by taking the current theorem and substituting things that
+    // are equal. Operates inside a box, i.e. the equality might be conditional on some
+    // hypotheses.
+    //
+    // `target` does not include the boxed stuff.
+    //
+    // ```
+    // use kernel::pa_axiom::Theorem;
+    // use theory::boxing::TheoremBox;
+    // use theory::eq::TheoremEq;
+    //
+    // let t0 = Theorem::aa1().import_subst(&[], &["0"]).unwrap();
+    // t0.chk("0 + 0 = 0");
+    // let t1 = Theorem::as1().import_subst(&[], &["0"]).unwrap();
+    // t1.chk("!(0 = S(0))");
+    // let t2 = t1.eq_subst(t0, "!(0 = S(0+0))", &[]).unwrap();
+    // t2.chk("!(0 = S(0+0))");
+    // ```
+    /*fn eq_subst(
         self,
         equality: Self,
         target: impl ToFormula,
         boxes: &[Boxing],
-    ) -> Result<Self, TheoryError>;
+    ) -> Result<Self, TheoryError>;*/
 
     /// Assumes that self is a boxed equality. Aims to prove our RHS = target.
     fn equals(self, target: impl ToExpr, equalizer: impl Equalizer) -> Result<Self, TheoryError>;
 }
 
+/*
 // Aim to prove left = right
 fn eq_subst_exp(
     left: &Expr,
@@ -122,7 +122,9 @@ fn eq_subst_exp(
         }
     }
 }
+*/
 
+/*
 // Aim to prove source -> target
 fn eq_subst_rec(
     source: &Formula,
@@ -211,9 +213,10 @@ fn eq_subst_rec(
         }
     }
 }
+*/
 
 impl TheoremEq for Theorem {
-    fn eq_subst(
+    /*fn eq_subst(
         self,
         equality: Self,
         target: impl ToFormula,
@@ -235,7 +238,7 @@ impl TheoremEq for Theorem {
             boxes,
         )?
         .box_mp(self, boxes)
-    }
+    }*/
 
     fn equals(self, target: impl ToExpr, equalizer: impl Equalizer) -> Result<Self, TheoryError> {
         let (boxes, left, right) = boxing::peel_box_until_eq(&self.formula())?;
@@ -246,6 +249,7 @@ impl TheoremEq for Theorem {
     }
 }
 
+/*
 #[cfg(test)]
 mod test {
     use super::TheoremEq;
@@ -407,3 +411,4 @@ mod test {
         t1.chk("@x(x = 0 -> @y(0 + 0 = x))");
     }
 }
+*/

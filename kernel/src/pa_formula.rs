@@ -8,8 +8,90 @@ pub enum SyntaxError {
     SubstForBoundVar(String),
 }
 
+#[derive(Clone, Default, Eq, PartialEq)]
+pub struct VarSet(Rc<Vec<String>>);
+
+impl VarSet {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn singleton(x: &str) -> Self {
+        VarSet(Rc::new(vec![x.to_owned()]))
+    }
+
+    pub fn contains(&self, x: &str) -> bool {
+        self.0.iter().any(|y| y == x)
+    }
+
+    pub fn slice(&self) -> &[String] {
+        &self.0
+    }
+
+    pub fn example(&self) -> Option<&str> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(&self.0[0])
+        }
+    }
+
+    pub fn intersects<'a>(&self, other: &'a Self) -> Option<&'a str> {
+        for x in other.0.iter() {
+            if self.contains(x) {
+                return Some(x);
+            }
+        }
+        None
+    }
+
+    pub fn with(&self, x: &str) -> Self {
+        if self.contains(x) {
+            self.clone()
+        } else {
+            let mut vec = (*self.0).clone();
+            vec.push(x.to_owned());
+            VarSet(Rc::new(vec))
+        }
+    }
+
+    pub fn without(&self, x: &str) -> Self {
+        if !self.contains(x) {
+            self.clone()
+        } else {
+            let vec = (*self.0).clone().into_iter().filter(|y| y != x).collect();
+            VarSet(Rc::new(vec))
+        }
+    }
+
+    pub fn union(&self, other: &Self) -> Self {
+        if self.is_empty() {
+            other.clone()
+        } else if other.is_empty() {
+            self.clone()
+        } else if self == other {
+            self.clone()
+        } else {
+            let mut vec = (*self.0).clone();
+            for x in other.0.iter() {
+                if !vec.contains(x) {
+                    vec.push(x.clone())
+                }
+            }
+            vec.sort();
+            VarSet(Rc::new(vec))
+        }
+    }
+}
+
 #[derive(Clone, Eq, PartialEq)]
-pub enum Expr {
+pub struct Expr {
+    e: ExprEnum,
+    v: VarSet,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+enum ExprEnum {
     Var(String),
     Z,
     S(Rc<Expr>),
@@ -19,130 +101,181 @@ pub enum Expr {
 
 impl std::fmt::Debug for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Expr::Var(x) => write!(f, "{}", x),
-            Expr::Z => write!(f, "0"),
-            Expr::S(e) => write!(f, "S({:?})", e),
-            Expr::Add(a, b) => write!(f, "({:?}+{:?})", a, b),
-            Expr::Mul(a, b) => write!(f, "({:?}+{:?})", a, b),
+        match &self.e {
+            ExprEnum::Var(x) => write!(f, "{}", x),
+            ExprEnum::Z => write!(f, "0"),
+            ExprEnum::S(e) => write!(f, "S({:?})", e),
+            ExprEnum::Add(a, b) => write!(f, "({:?}+{:?})", a, b),
+            ExprEnum::Mul(a, b) => write!(f, "({:?}+{:?})", a, b),
         }
     }
 }
 
 #[derive(Clone, Eq, PartialEq)]
-pub enum Formula {
+pub struct Formula {
+    f: FormulaEnum,
+    free: VarSet,
+    bound: VarSet,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+enum FormulaEnum {
     False,
     Eq(Rc<Expr>, Rc<Expr>),
     Imp(Rc<Formula>, Rc<Formula>),
     ForAll(String, Rc<Formula>),
-    Memo(FormulaVars),
 }
 
 impl std::fmt::Debug for Formula {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Formula::False => write!(f, "false"),
-            Formula::Eq(a, b) => write!(f, "({:?}={:?})", a, b),
-            Formula::Imp(a, b) => write!(f, "({:?} -> {:?})", a, b),
-            Formula::ForAll(x, a) => write!(f, "@{}({:?})", x, a),
-            Formula::Memo(fv) => write!(f, "{:?}", fv),
+        match &self.f {
+            FormulaEnum::False => write!(f, "false"),
+            FormulaEnum::Eq(a, b) => write!(f, "({:?}={:?})", a, b),
+            FormulaEnum::Imp(a, b) => write!(f, "({:?} -> {:?})", a, b),
+            FormulaEnum::ForAll(x, a) => write!(f, "@{}({:?})", x, a),
         }
     }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ExprVars {
-    e: Rc<Expr>,
-    free: Vec<String>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FormulaVars {
-    f: Rc<Formula>,
-    free: Vec<String>,
-    bound: Vec<String>,
 }
 
 impl Expr {
+    pub fn cases<'a, T: 'a>(
+        &'a self,
+        var: impl FnOnce(&'a String) -> T,
+        z: impl FnOnce() -> T,
+        s: impl FnOnce(&'a Expr) -> T,
+        add: impl FnOnce(&'a Expr, &'a Expr) -> T,
+        mul: impl FnOnce(&'a Expr, &'a Expr) -> T,
+    ) -> T {
+        match &self.e {
+            ExprEnum::Var(x) => var(x),
+            ExprEnum::Z => z(),
+            ExprEnum::S(a) => s(a),
+            ExprEnum::Add(a, b) => add(a, b),
+            ExprEnum::Mul(a, b) => mul(a, b),
+        }
+    }
+
+    pub fn free(&self) -> &VarSet {
+        &self.v
+    }
+
+    pub fn has_free(&self, x: &str) -> bool {
+        self.v.contains(x)
+    }
+
     pub fn var(x: &str) -> Self {
-        Expr::Var(x.to_owned())
+        Expr {
+            e: ExprEnum::Var(x.to_owned()),
+            v: VarSet::singleton(x),
+        }
     }
 
     pub fn z() -> Self {
-        Expr::Z
+        Expr {
+            e: ExprEnum::Z,
+            v: VarSet::default(),
+        }
     }
 
     pub fn s(self) -> Self {
-        Expr::S(Rc::new(self))
+        let v = self.v.clone();
+        Expr {
+            e: ExprEnum::S(Rc::new(self)),
+            v,
+        }
     }
 
     pub fn add(self, other: Self) -> Self {
-        Expr::Add(Rc::new(self), Rc::new(other))
+        let v = self.v.union(&other.v);
+        Expr {
+            e: ExprEnum::Add(Rc::new(self), Rc::new(other)),
+            v,
+        }
     }
 
     pub fn mul(self, other: Self) -> Self {
-        Expr::Mul(Rc::new(self), Rc::new(other))
+        let v = self.v.union(&other.v);
+        Expr {
+            e: ExprEnum::Mul(Rc::new(self), Rc::new(other)),
+            v,
+        }
     }
 
     pub fn eq(self, other: Self) -> Formula {
-        Formula::Eq(Rc::new(self), Rc::new(other))
-    }
-
-    pub fn reconstitute(&self) -> ExprVars {
-        ExprVars {
-            e: Rc::new(self.clone()),
-            free: self.free(),
+        let free = self.v.union(&other.v);
+        Formula {
+            f: FormulaEnum::Eq(Rc::new(self), Rc::new(other)),
+            free,
+            bound: VarSet::default(),
         }
-    }
-}
-
-impl ExprVars {
-    pub fn expr(&self) -> &Expr {
-        &self.e
-    }
-
-    pub fn free(&self) -> &[String] {
-        &self.free
     }
 }
 
 impl Formula {
-    pub fn reconstitute(&self) -> Result<FormulaVars, SyntaxError> {
-        let (bound, free) = self.check_vars()?;
-        Ok(FormulaVars {
-            f: Rc::new(self.clone()),
-            bound,
-            free
-        })
+    pub fn cases<'a, T: 'a>(
+        &'a self,
+        fals: impl FnOnce() -> T,
+        eq: impl FnOnce(&'a Expr, &'a Expr) -> T,
+        imp: impl FnOnce(&'a Formula, &'a Formula) -> T,
+        forall: impl FnOnce(&'a str, &'a Formula) -> T,
+    ) -> T {
+        match &self.f {
+            FormulaEnum::False => fals(),
+            FormulaEnum::Eq(a, b) => eq(a, b),
+            FormulaEnum::Imp(a, b) => imp(a, b),
+            FormulaEnum::ForAll(x, a) => forall(x, a),
+        }
     }
 
     pub fn falsehood() -> Self {
-        Formula::False
+        Formula {
+            f: FormulaEnum::False,
+            free: VarSet::default(),
+            bound: VarSet::default(),
+        }
     }
 
-    pub fn imp(self, other: Self) -> Self {
-        Formula::Imp(Rc::new(self), Rc::new(other))
+    pub fn imp(self, other: Self) -> Result<Self, SyntaxError> {
+        let free = self.free.union(&other.free);
+        let bound = self.bound.union(&other.bound);
+        if let Some(x) = free.intersects(&bound) {
+            Err(SyntaxError::MixingFreeAndBound(x.to_owned()))
+        } else {
+            Ok(Formula {
+                f: FormulaEnum::Imp(Rc::new(self), Rc::new(other)),
+                free,
+                bound,
+            })
+        }
     }
 
-    pub fn forall(self, x: &str) -> Self {
-        Formula::ForAll(x.to_owned(), Rc::new(self))
+    pub fn forall(self, x: &str) -> Result<Self, SyntaxError> {
+        if self.bound.contains(x) {
+            Err(SyntaxError::BoundTwice(x.to_owned()))
+        } else {
+            let free = self.free.without(x);
+            let bound = self.bound.with(x);
+            Ok(Formula {
+                f: FormulaEnum::ForAll(x.to_owned(), Rc::new(self)),
+                free,
+                bound,
+            })
+        }
     }
 
-    pub fn memo(self) -> Result<Self, SyntaxError> {
-        Ok(Formula::Memo(self.reconstitute()?))
-    }
-}
-
-impl FormulaVars {
-    pub fn formula(&self) -> &Formula {
-        &self.f
-    }
-
-    pub fn free(&self) -> &[String] {
+    pub fn free(&self) -> &VarSet {
         &self.free
     }
 
-    pub fn bound(&self) -> &[String] {
+    pub fn has_free(&self, x: &str) -> bool {
+        self.free.contains(x)
+    }
+
+    pub fn bound(&self) -> &VarSet {
         &self.bound
+    }
+
+    pub fn has_bound(&self, x: &str) -> bool {
+        self.bound.contains(x)
     }
 }

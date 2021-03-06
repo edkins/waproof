@@ -23,129 +23,13 @@ impl From<SyntaxError> for TheoremError {
     }
 }
 
-impl Expr {
-    pub fn free(&self) -> Vec<String> {
-        let mut free = vec![];
-        self.get_vars_recursive(&[], &[], &mut free).unwrap();  // can only fail if there's bound stuff
-        free
-    }
-
-    pub fn has_free(&self, x: &str) -> bool {
-        self.free().iter().any(|y|y==x)
-    }
-
-    fn get_vars_recursive(&self, current_bound: &[String], bound: &[String], free: &mut Vec<String>) -> Result<(), SyntaxError> {
-        match self {
-            Expr::Z => Ok(()),
-            Expr::Var(x) => {
-                if !current_bound.contains(x) {
-                    if bound.contains(x) {
-                        return Err(SyntaxError::MixingFreeAndBound(x.clone()));
-                    }
-                    if !free.contains(x) {
-                        free.push(x.clone());
-                    }
-                }
-                Ok(())
-            }
-            Expr::S(a) => a.get_vars_recursive(current_bound, bound, free),
-            Expr::Add(a,b) | Expr::Mul(a, b) => {
-                a.get_vars_recursive(current_bound, bound, free)?;
-                b.get_vars_recursive(current_bound, bound, free)
-            }
-        }
-    }
-}
-
 impl Formula {
-    fn get_vars_recursive(&self, current_bound: &mut Vec<String>, bound: &mut Vec<String>, free: &mut Vec<String>) -> Result<(), SyntaxError> {
-        match self {
-            Formula::False => Ok(()),
-            Formula::Eq(a,b) => {
-                a.get_vars_recursive(current_bound, bound, free)?;
-                b.get_vars_recursive(current_bound, bound, free)
-            }
-            Formula::Imp(a,b) => {
-                a.get_vars_recursive(current_bound, bound, free)?;
-                b.get_vars_recursive(current_bound, bound, free)
-            }
-            Formula::ForAll(x,a) => {
-                if current_bound.contains(x) {
-                    return Err(SyntaxError::BoundTwice(x.clone()));
-                }
-                if free.contains(x) {
-                    return Err(SyntaxError::MixingFreeAndBound(x.clone()));
-                }
-                if !bound.contains(x) {
-                    bound.push(x.clone());
-                }
-                current_bound.push(x.clone());
-                let res = a.get_vars_recursive(current_bound, bound, free);
-                current_bound.pop();
-                res
-            }
-            Formula::Memo(fv) => {
-                for x in fv.bound() {
-                    if current_bound.contains(x) {
-                        return Err(SyntaxError::BoundTwice(x.clone()));
-                    }
-                    if free.contains(x) {
-                        return Err(SyntaxError::MixingFreeAndBound(x.clone()));
-                    }
-                    if !bound.contains(x) {
-                        bound.push(x.clone());
-                    }
-                }
-                for x in fv.free() {
-                    if !current_bound.contains(x) {
-                        if bound.contains(x) {
-                            return Err(SyntaxError::MixingFreeAndBound(x.clone()));
-                        }
-                        if !free.contains(x) {
-                            free.push(x.clone());
-                        }
-                    }
-                }
-                Ok(())
-            }
-        }
-    }
-
-    pub fn check_vars(&self) -> Result<(Vec<String>, Vec<String>), SyntaxError> {
-        let mut current_bound = vec![];
-        let mut bound = vec![];
-        let mut free = vec![];
-        self.get_vars_recursive(&mut current_bound, &mut bound, &mut free)?;
-        Ok((bound, free))
-    }
-
-    pub fn sane(&self) -> Result<(), SyntaxError> {
-        self.check_vars()?;
-        Ok(())
-    }
-
-    pub fn bound(&self) -> Result<Vec<String>, SyntaxError> {
-        Ok(self.check_vars()?.0)
-    }
-
-    pub fn has_bound(&self, x: &str) -> Result<bool, SyntaxError> {
-        Ok(self.bound()?.iter().any(|y|y==x))
-    }
-
-    pub fn free(&self) -> Result<Vec<String>, SyntaxError> {
-        Ok(self.check_vars()?.1)
-    }
-
-    pub fn has_free(&self, x: &str) -> Result<bool, SyntaxError> {
-        Ok(self.free()?.iter().any(|y|y==x))
-    }
-
     fn generalize(mut self, gen: &[String]) -> Result<Self, TheoremError> {
         for var in gen.iter().rev() {
-            self = self.forall(var);
+            self = self.forall(var)?;
         }
-        if let Some(x) = self.free()?.get(0) {
-            Err(TheoremError::FreeVar(x.clone()))
+        if let Some(x) = self.free().example() {
+            Err(TheoremError::FreeVar(x.to_owned()))
         } else {
             Ok(self)
         }
@@ -159,112 +43,84 @@ impl Theorem {
     }
 
     pub fn a1(a: Formula, b: Formula, gen: &[String]) -> Result<Self, TheoremError> {
-        a.sane()?;
-        b.sane()?;
-        let f = a.clone().imp(b.imp(a)).generalize(gen)?;
+        let f = a.clone().imp(b.imp(a)?)?.generalize(gen)?;
         Ok(Theorem { f })
     }
 
-    pub fn a2(
-        a: Formula,
-        b: Formula,
-        c: Formula,
-        gen: &[String],
-    ) -> Result<Self, TheoremError> {
-        a.sane()?;
-        b.sane()?;
-        c.sane()?;
-        let abc = a.clone().imp(b.clone().imp(c.clone()));
-        let abac = a.clone().imp(b).imp(a.imp(c));
-        let f = abc.imp(abac).generalize(gen)?;
+    pub fn a2(a: Formula, b: Formula, c: Formula, gen: &[String]) -> Result<Self, TheoremError> {
+        let abc = a.clone().imp(b.clone().imp(c.clone())?)?;
+        let abac = a.clone().imp(b)?.imp(a.imp(c)?)?;
+        let f = abc.imp(abac)?.generalize(gen)?;
         Ok(Theorem { f })
     }
 
     pub fn a3(a: Formula, gen: &[String]) -> Result<Self, TheoremError> {
-        a.sane()?;
         let f = a
             .clone()
-            .imp(Formula::falsehood())
-            .imp(Formula::falsehood())
-            .imp(a)
+            .imp(Formula::falsehood())?
+            .imp(Formula::falsehood())?
+            .imp(a)?
             .generalize(gen)?;
         Ok(Theorem { f })
     }
 
-    pub fn a4(
-        a: Formula,
-        b: Formula,
-        x: &str,
-        gen: &[String],
-    ) -> Result<Self, TheoremError> {
-        if a.has_bound(x)? || b.has_bound(x)? {
+    pub fn a4(a: Formula, b: Formula, x: &str, gen: &[String]) -> Result<Self, TheoremError> {
+        if a.has_bound(x) || b.has_bound(x) {
             return Err(TheoremError::BoundTwice(x.to_owned()));
         }
-        let f = a.clone().imp(b.clone())
-            .forall(x)
-            .imp(a.forall(x).imp(b.forall(x)))
+        let f = a
+            .clone()
+            .imp(b.clone())?
+            .forall(x)?
+            .imp(a.forall(x)?.imp(b.forall(x)?)?)?
             .generalize(gen)?;
         Ok(Theorem { f })
     }
 
     pub fn a5(a: Formula, x: &str, gen: &[String]) -> Result<Self, TheoremError> {
-        if a.has_free(x)? {
+        if a.has_free(x) {
             return Err(TheoremError::MixingFreeAndBound(x.to_owned()));
         }
-        if a.has_bound(x)? {
+        if a.has_bound(x) {
             return Err(TheoremError::BoundTwice(x.to_owned()));
         }
-        let f = a.clone().imp(a.forall(x)).generalize(gen)?;
+        let f = a.clone().imp(a.forall(x)?)?.generalize(gen)?;
         Ok(Theorem { f })
     }
 
     pub fn a6(a: Formula, x: &str, e: Expr, gen: &[String]) -> Result<Self, TheoremError> {
-        let a_bound = a.bound()?;
-        for y in e.free() {
-            if a_bound.contains(&y) {
-                return Err(TheoremError::SubstForBoundVar(y.clone()));
-            }
+        if let Some(y) = e.free().intersects(a.bound()) {
+            return Err(TheoremError::SubstForBoundVar(y.to_owned()));
         }
-        if a_bound.iter().any(|y|y==x) {
+        if a.has_bound(x) {
             return Err(TheoremError::SubstBoundVar(x.to_owned()));
         }
-        let f = a.clone().forall(x).imp(a.subst(x, &e)?).generalize(gen)?;
-        Ok(Theorem { f })
-    }
-
-    pub fn memo(a: Formula, gen: &[String]) -> Result<Self, TheoremError> {
-        a.sane()?;
-        let f = a.clone().imp(a.memo()?).generalize(gen)?;
-        Ok(Theorem { f })
-    }
-
-    pub fn unmemo(a: Formula, gen: &[String]) -> Result<Self, TheoremError> {
-        a.sane()?;
-        let f = a.clone().memo()?.imp(a).generalize(gen)?;
+        let f = a.clone().forall(x)?.imp(a.subst(x, &e)?)?.generalize(gen)?;
         Ok(Theorem { f })
     }
 
     pub fn mp(self, other: Theorem) -> Result<Self, TheoremError> {
-        if let Formula::Imp(a, b) = &self.f {
-            if **a == other.f {
-                let f = (**b).clone();
-                Ok(Theorem { f })
-            } else {
-                //panic!();   // helps if you want a stack trace
-                Err(TheoremError::WrongHyp)
-            }
-        } else {
-            Err(TheoremError::NotImp)
-        }
+        self.f.cases(
+            || Err(TheoremError::NotImp),
+            |_, _| Err(TheoremError::NotImp),
+            |a, b| {
+                if *a == other.f {
+                    let f = b.clone();
+                    Ok(Theorem { f })
+                } else {
+                    //panic!();   // helps if you want a stack trace
+                    Err(TheoremError::WrongHyp)
+                }
+            },
+            |_, _| Err(TheoremError::NotImp),
+        )
     }
 }
 
 // PA Axioms
 impl Theorem {
     pub fn ae1() -> Theorem {
-        let f = Expr::var("x")
-            .eq(Expr::var("x"))
-            .forall("x");
+        let f = Expr::var("x").eq(Expr::var("x")).forall("x").unwrap();
         Theorem { f }
     }
 
@@ -272,8 +128,11 @@ impl Theorem {
         let f = Expr::var("x")
             .eq(Expr::var("y"))
             .imp(Expr::var("y").eq(Expr::var("x")))
+            .unwrap()
             .forall("y")
-            .forall("x");
+            .unwrap()
+            .forall("x")
+            .unwrap();
         Theorem { f }
     }
 
@@ -284,10 +143,15 @@ impl Theorem {
                 Expr::var("y")
                     .eq(Expr::var("z"))
                     .imp(Expr::var("x").eq(Expr::var("z")))
+                    .unwrap(),
             )
+            .unwrap()
             .forall("z")
+            .unwrap()
             .forall("y")
-            .forall("x");
+            .unwrap()
+            .forall("x")
+            .unwrap();
         Theorem { f }
     }
 
@@ -295,8 +159,11 @@ impl Theorem {
         let f = Expr::var("x")
             .eq(Expr::var("y"))
             .imp(Expr::var("x").s().eq(Expr::var("y").s()))
+            .unwrap()
             .forall("y")
-            .forall("x");
+            .unwrap()
+            .forall("x")
+            .unwrap();
         Theorem { f }
     }
 
@@ -308,9 +175,13 @@ impl Theorem {
                     .add(Expr::var("z"))
                     .eq(Expr::var("y").add(Expr::var("z"))),
             )
+            .unwrap()
             .forall("z")
+            .unwrap()
             .forall("y")
-            .forall("x");
+            .unwrap()
+            .forall("x")
+            .unwrap();
         Theorem { f }
     }
 
@@ -322,9 +193,13 @@ impl Theorem {
                     .add(Expr::var("y"))
                     .eq(Expr::var("x").add(Expr::var("z"))),
             )
+            .unwrap()
             .forall("z")
+            .unwrap()
             .forall("y")
-            .forall("x");
+            .unwrap()
+            .forall("x")
+            .unwrap();
         Theorem { f }
     }
 
@@ -336,9 +211,13 @@ impl Theorem {
                     .mul(Expr::var("z"))
                     .eq(Expr::var("y").mul(Expr::var("z"))),
             )
+            .unwrap()
             .forall("z")
+            .unwrap()
             .forall("y")
-            .forall("x");
+            .unwrap()
+            .forall("x")
+            .unwrap();
         Theorem { f }
     }
 
@@ -350,9 +229,13 @@ impl Theorem {
                     .mul(Expr::var("y"))
                     .eq(Expr::var("x").mul(Expr::var("z"))),
             )
+            .unwrap()
             .forall("z")
+            .unwrap()
             .forall("y")
-            .forall("x");
+            .unwrap()
+            .forall("x")
+            .unwrap();
         Theorem { f }
     }
 
@@ -360,7 +243,9 @@ impl Theorem {
         let f = Expr::z()
             .eq(Expr::var("x").s())
             .imp(Formula::falsehood())
-            .forall("x");
+            .unwrap()
+            .forall("x")
+            .unwrap();
         Theorem { f }
     }
 
@@ -369,8 +254,11 @@ impl Theorem {
             .s()
             .eq(Expr::var("y").s())
             .imp(Expr::var("x").eq(Expr::var("y")))
+            .unwrap()
             .forall("y")
-            .forall("x");
+            .unwrap()
+            .forall("x")
+            .unwrap();
         Theorem { f }
     }
 
@@ -378,7 +266,8 @@ impl Theorem {
         let f = Expr::var("x")
             .add(Expr::z())
             .eq(Expr::var("x"))
-            .forall("x");
+            .forall("x")
+            .unwrap();
         Theorem { f }
     }
 
@@ -387,7 +276,9 @@ impl Theorem {
             .add(Expr::var("y").s())
             .eq(Expr::var("x").add(Expr::var("y")).s())
             .forall("y")
-            .forall("x");
+            .unwrap()
+            .forall("x")
+            .unwrap();
         Theorem { f }
     }
 
@@ -395,31 +286,31 @@ impl Theorem {
         let f = Expr::var("x")
             .mul(Expr::z())
             .eq(Expr::z())
-            .forall("x");
+            .forall("x")
+            .unwrap();
         Theorem { f }
     }
 
     pub fn am2() -> Theorem {
         let f = Expr::var("x")
             .mul(Expr::var("y").s())
-            .eq(Expr::var("x")
-                .mul(Expr::var("y"))
-                .add(Expr::var("x")))
+            .eq(Expr::var("x").mul(Expr::var("y")).add(Expr::var("x")))
             .forall("y")
-            .forall("x");
+            .unwrap()
+            .forall("x")
+            .unwrap();
         Theorem { f }
     }
 
     pub fn aind(a: Formula, x: &str, gen: &[String]) -> Result<Theorem, TheoremError> {
-        a.sane()?;
-        if a.has_bound(x)? {
+        if a.has_bound(x) {
             return Err(TheoremError::BoundTwice(x.to_owned()));
         }
         let a0 = a.clone().subst(x, &Expr::z())?;
         let ax = a.clone();
         let asx = a.clone().subst(x, &Expr::var(x).s())?;
         let f = a0
-            .imp(ax.imp(asx).forall(x).imp(a.forall(x)))
+            .imp(ax.imp(asx)?.forall(x)?.imp(a.forall(x)?)?)?
             .generalize(gen)?;
         Ok(Theorem { f })
     }
@@ -482,10 +373,9 @@ mod test {
     #[test]
     fn a2_xyz() {
         let t = Theorem::a2(x_eq_y(), y_eq_x(), z_eq_0(), &v(&["z", "y", "x"])).unwrap();
-        let expected: Formula =
-            "@z(@y(@x((x=y -> y=x -> z=0) -> (x=y -> y=x) -> (x=y -> z=0))))"
-                .parse()
-                .unwrap();
+        let expected: Formula = "@z(@y(@x((x=y -> y=x -> z=0) -> (x=y -> y=x) -> (x=y -> z=0))))"
+            .parse()
+            .unwrap();
         assert_eq!(expected, t.f);
     }
 
@@ -511,8 +401,8 @@ mod test {
     #[test]
     fn a4_bound_fail() {
         assert!(Theorem::a4(
-            x_eq_y().forall("x"),
-            y_eq_x().forall("x"),
+            x_eq_y().forall("x").unwrap(),
+            y_eq_x().forall("x").unwrap(),
             "x",
             &v(&["y"])
         )
@@ -533,7 +423,7 @@ mod test {
 
     #[test]
     fn a5_bound_fail() {
-        assert!(Theorem::a5(z_eq_0().forall("z"), "z", &[]).is_err());
+        assert!(Theorem::a5(z_eq_0().forall("z").unwrap(), "z", &[]).is_err());
     }
 
     #[test]
@@ -545,24 +435,12 @@ mod test {
 
     #[test]
     fn a6_bound_fail() {
-        assert!(Theorem::a6(
-            x_eq_y().forall("x"),
-            "x",
-            Expr::z(),
-            &v(&["y"])
-        )
-        .is_err());
+        assert!(Theorem::a6(x_eq_y().forall("x").unwrap(), "x", Expr::z(), &v(&["y"])).is_err());
     }
 
     #[test]
     fn a6_for_bound_fail() {
-        assert!(Theorem::a6(
-            x_eq_y().forall("x"),
-            "y",
-            Expr::var("x").s(),
-            &[]
-        )
-        .is_err());
+        assert!(Theorem::a6(x_eq_y().forall("x").unwrap(), "y", Expr::var("x").s(), &[]).is_err());
     }
 
     #[test]
@@ -702,6 +580,6 @@ mod test {
 
     #[test]
     fn aind_bound_fail() {
-        assert!(Theorem::aind(z_eq_0().forall("z"), "z", &[]).is_err());
+        assert!(Theorem::aind(z_eq_0().forall("z").unwrap(), "z", &[]).is_err());
     }
 }

@@ -1,4 +1,4 @@
-use crate::pa_formula::{Expr, Formula};
+use crate::pa_formula::{Expr, Formula, SyntaxError};
 
 ////////////////
 //
@@ -6,12 +6,12 @@ use crate::pa_formula::{Expr, Formula};
 //
 ////////////////
 
-impl Formula{
+impl Formula {
     pub fn not(self) -> Formula {
-        self.imp(Formula::falsehood())
+        self.imp(Formula::falsehood()).unwrap()
     }
 
-    pub fn or(self, other: Self) -> Formula {
+    pub fn or(self, other: Self) -> Result<Formula, SyntaxError> {
         self.not().imp(other)
     }
 
@@ -21,12 +21,12 @@ impl Formula{
     // 0    1      1        1        0
     // 1    0      0        1        0
     // 1    1      1        0        1
-    pub fn and(self, other: Self) -> Formula {
-        self.imp(other.not()).not()
+    pub fn and(self, other: Self) -> Result<Formula, SyntaxError> {
+        Ok(self.imp(other.not())?.not())
     }
 
-    pub fn exists(self, x: &str) -> Formula {
-        self.not().forall(x).not()
+    pub fn exists(self, x: &str) -> Result<Formula, SyntaxError> {
+        Ok(self.not().forall(x)?.not())
     }
 }
 

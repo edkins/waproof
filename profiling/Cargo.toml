@@ -8,3 +8,6 @@ edition = "2018"
 
 [dependencies]
 theory = {path = "../theory"}
+
+[profile.release]
+debug = true

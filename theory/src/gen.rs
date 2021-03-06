@@ -11,12 +11,25 @@ pub trait TheoremGen: Sized {
     fn subst_one(self, x: &str, e: Expr) -> Result<Self, TheoryError>;
 }
 
+pub fn expect_imp(a: &Formula) -> Result<(&Formula, &Formula), TheoryError> {
+    a.cases(
+        || Err(TheoryError::NotImp),
+        |_,_| Err(TheoryError::NotImp),
+        |b,c| Ok((b,c)),
+        |_,_| Err(TheoryError::NotImp))
+}
+
+pub fn expect_forall<'a>(a: &'a Formula) -> Result<(&'a str, &'a Formula), TheoryError> {
+    a.cases(
+        || Err(TheoryError::NotForAll),
+        |_,_| Err(TheoryError::NotForAll),
+        |_,_| Err(TheoryError::NotForAll),
+        |x,b| Ok((x,b)))
+}
+
 pub fn peel_forall(a: &Formula) -> Result<(String, Formula), TheoryError> {
-    if let Formula::ForAll(x, f) = a {
-        Ok((x.to_owned(), (**f).clone()))
-    } else {
-        Err(TheoryError::NotForAll)
-    }
+    let (x,f) = expect_forall(a)?;
+    Ok((x.to_owned(), (*f).clone()))
 }
 
 pub fn peel_foralls(
@@ -26,12 +39,9 @@ pub fn peel_foralls(
     let mut vars = vec![];
     let mut f = a.clone();
     for _ in 0..count {
-        if let Formula::ForAll(x, f2) = f {
-            vars.push(x.to_owned());
-            f = (*f2).clone();
-        } else {
-            return Err(TheoryError::NotForAll);
-        }
+        let (x, f2) = expect_forall(&f)?;
+        vars.push(x.to_owned());
+        f = (*f2).clone();
     }
     Ok((vars, f))
 }
@@ -40,22 +50,19 @@ fn peel_foralls_until(a: &Formula, x: &str) -> Result<(Vec<String>, Formula), Th
     let mut vars = vec![];
     let mut f = a.clone();
     loop {
-        if let Formula::ForAll(y, f2) = f.clone() {
-            if y == x {
-                break;
-            } else {
-                f = (*f2).clone();
-                vars.push(y.to_owned());
-            }
+        let (y,f2) = expect_forall(&f).map_err(|_|TheoryError::NotOuterVar(x.to_owned()))?;
+        if y == x {
+            break;
         } else {
-            return Err(TheoryError::NotOuterVar(x.to_owned()));
+            vars.push(y.to_owned());
+            f = (*f2).clone();
         }
     }
     Ok((vars, f))
 }
 
 pub fn check_expr_environment(e: &Expr, vars: &[String]) -> Result<(), TheoryError> {
-    for x in &e.free() {
+    for x in e.free().slice() {
         if !vars.contains(x) {
             return Err(TheoryError::SubstNotInEnvironment(x.clone()));
         }
@@ -117,7 +124,7 @@ impl TheoremGen for Theorem {
         if vars.iter().any(|y| y == x) {
             return Err(TheoryError::RenameOuterConflict(x.to_owned()));
         }
-        if f.has_bound(x)? {
+        if f.has_bound(x) {
             return Err(TheoryError::RenameInnerConflict(x.to_owned()));
         }
 
@@ -145,7 +152,7 @@ impl TheoremGen for Theorem {
     }
 
     fn absent_gen(mut self, gen: &[String]) -> Result<Self, TheoryError> {
-        let bounds = self.formula().bound()?;
+        let bounds = self.formula().bound().slice().to_vec();
         for x in gen.iter().rev() {
             if bounds.contains(x) {
                 return Err(TheoryError::NotAbsentGen(x.clone()));
@@ -162,14 +169,14 @@ impl TheoremGen for Theorem {
 
         let (orig_vars, f) = peel_foralls(self.formula(), es.len())?;
 
-        for y in &f.bound()? {
+        for y in f.bound().slice() {
             if gen.contains(y) {
                 return Err(TheoryError::SubstInnerConflict(y.clone()));
             }
         }
 
         // @o...(f[o...])
-        let vars = rename_to_avoid(&orig_vars, &[&f.bound()?, &gen]);
+        let vars = rename_to_avoid(&orig_vars, &[&f.bound().slice(), &gen]);
         for i in 0..vars.len() {
             self = self.outer_rename(&orig_vars[i], &vars[i])?;
         }
@@ -199,18 +206,13 @@ impl TheoremGen for Theorem {
             if x != y {
                 return Err(TheoryError::VarMismatch(x, y));
             }
-            let b = match &ab {
-                Formula::Imp(h, af) => {
-                    if **h != a {
-                        return Err(TheoryError::WrongHyp);
-                    }
-                    af
-                }
-                _ => return Err(TheoryError::NotImp),
-            };
+            let (h,b) = expect_imp(&ab)?;
+            if *h != a {
+                return Err(TheoryError::WrongHyp);
+            }
             // self: @xs...@x(a->b)
             // other: @xs...@x(a)
-            let t0 = Theorem::a4(a, (**b).clone(), &x, &xs)?; // @xs...(@x(a->b)->(@x(a)->@x(b)))
+            let t0 = Theorem::a4(a, b.clone(), &x, &xs)?; // @xs...(@x(a->b)->(@x(a)->@x(b)))
             let t1 = t0.gen_mp(self, count - 1)?;
             let t2 = t1.gen_mp(other, count - 1)?;
             Ok(t2)
