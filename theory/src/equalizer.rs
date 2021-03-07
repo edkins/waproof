@@ -47,9 +47,10 @@ pub struct Exact(pub Theorem);
 pub fn expect_eq(a: &Formula) -> Result<(&Expr, &Expr), TheoryError> {
     a.cases(
         || Err(TheoryError::StructuralMismatch),
-        |b,c| Ok((b,c)),
-        |_,_| Err(TheoryError::StructuralMismatch),
-        |_,_| Err(TheoryError::StructuralMismatch))
+        |b, c| Ok((b, c)),
+        |_, _| Err(TheoryError::StructuralMismatch),
+        |_, _| Err(TheoryError::StructuralMismatch),
+    )
 }
 
 impl Equalizer for Exact {
@@ -110,7 +111,7 @@ impl<E: Equalizer> SiteAdapt<E> {
                 } else {
                     Err(TheoryError::StructuralMismatch)
                 }
-            }
+            },
         )
     }
 }
@@ -136,8 +137,8 @@ pub fn expect_z(e: &Expr) -> Result<(), TheoryError> {
         |_| Err(TheoryError::StructuralMismatch),
         || Ok(()),
         |_| Err(TheoryError::StructuralMismatch),
-        |_,_| Err(TheoryError::StructuralMismatch),
-        |_,_| Err(TheoryError::StructuralMismatch)
+        |_, _| Err(TheoryError::StructuralMismatch),
+        |_, _| Err(TheoryError::StructuralMismatch),
     )
 }
 
@@ -146,9 +147,9 @@ pub fn expect_s(e: &Expr) -> Result<&Expr, TheoryError> {
         |_| Err(TheoryError::StructuralMismatch),
         || Err(TheoryError::StructuralMismatch),
         |y| Ok(y),
-        |_,_| Err(TheoryError::StructuralMismatch),
-        |_,_| Err(TheoryError::StructuralMismatch)
-        )
+        |_, _| Err(TheoryError::StructuralMismatch),
+        |_, _| Err(TheoryError::StructuralMismatch),
+    )
 }
 
 pub fn expect_add(e: &Expr) -> Result<(&Expr, &Expr), TheoryError> {
@@ -156,9 +157,9 @@ pub fn expect_add(e: &Expr) -> Result<(&Expr, &Expr), TheoryError> {
         |_| Err(TheoryError::StructuralMismatch),
         || Err(TheoryError::StructuralMismatch),
         |_| Err(TheoryError::StructuralMismatch),
-        |c,d| Ok((c,d)),
-        |_,_| Err(TheoryError::StructuralMismatch)
-        )
+        |c, d| Ok((c, d)),
+        |_, _| Err(TheoryError::StructuralMismatch),
+    )
 }
 
 pub fn expect_mul(e: &Expr) -> Result<(&Expr, &Expr), TheoryError> {
@@ -166,9 +167,9 @@ pub fn expect_mul(e: &Expr) -> Result<(&Expr, &Expr), TheoryError> {
         |_| Err(TheoryError::StructuralMismatch),
         || Err(TheoryError::StructuralMismatch),
         |_| Err(TheoryError::StructuralMismatch),
-        |_,_| Err(TheoryError::StructuralMismatch),
-        |c,d| Ok((c,d))
-        )
+        |_, _| Err(TheoryError::StructuralMismatch),
+        |c, d| Ok((c, d)),
+    )
 }
 
 pub enum ExprRef<'a> {
@@ -185,8 +186,8 @@ pub fn as_enum<'a>(e: &'a Expr) -> ExprRef<'a> {
         || ExprRef::Z,
         ExprRef::S,
         ExprRef::Add,
-        ExprRef::Mul
-        )
+        ExprRef::Mul,
+    )
 }
 
 fn figure_out_substitutions(
@@ -212,12 +213,12 @@ fn figure_out_substitutions(
             let y = expect_s(after)?;
             figure_out_substitutions(map, x, y)
         }
-        ExprRef::Add(a,b) => {
-            let (c,d) = expect_add(after)?;
+        ExprRef::Add(a, b) => {
+            let (c, d) = expect_add(after)?;
             figure_out_substitutions(map, a, c)?;
             figure_out_substitutions(map, b, d)
         }
-        ExprRef::Mul(a,b) => {
+        ExprRef::Mul(a, b) => {
             let (c, d) = expect_mul(after)?;
             figure_out_substitutions(map, a, c)?;
             figure_out_substitutions(map, b, d)

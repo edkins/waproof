@@ -59,7 +59,12 @@ impl VarSet {
         if !self.contains(x) {
             self.clone()
         } else {
-            let vec = self.0.iter().filter(|y| y != &x).map(|y|y.clone()).collect();
+            let vec = self
+                .0
+                .iter()
+                .filter(|y| y != &x)
+                .map(|y| y.clone())
+                .collect();
             VarSet(Rc::new(vec))
         }
     }

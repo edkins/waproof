@@ -19,6 +19,7 @@ pub enum TheoryError {
     ImportDepthTooGreat,
     NotAbsentGen(String),
     NotEquality,
+    NotFalse,
     NotForAll,
     NotForAllOrHyp,
     NotImp,

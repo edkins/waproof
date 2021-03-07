@@ -1,5 +1,6 @@
 pub mod add;
 pub mod boxing;
+pub mod coprime;
 pub mod eq;
 pub mod equalizer;
 pub mod gen;

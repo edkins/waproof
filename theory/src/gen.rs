@@ -11,31 +11,39 @@ pub trait TheoremGen: Sized {
     fn subst_one(self, x: &str, e: Expr) -> Result<Self, TheoryError>;
 }
 
+pub fn expect_false(a: &Formula) -> Result<(), TheoryError> {
+    a.cases(
+        || Ok(()),
+        |_, _| Err(TheoryError::NotFalse),
+        |_, _| Err(TheoryError::NotFalse),
+        |_, _| Err(TheoryError::NotFalse),
+    )
+}
+
 pub fn expect_imp(a: &Formula) -> Result<(&Formula, &Formula), TheoryError> {
     a.cases(
         || Err(TheoryError::NotImp),
-        |_,_| Err(TheoryError::NotImp),
-        |b,c| Ok((b,c)),
-        |_,_| Err(TheoryError::NotImp))
+        |_, _| Err(TheoryError::NotImp),
+        |b, c| Ok((b, c)),
+        |_, _| Err(TheoryError::NotImp),
+    )
 }
 
 pub fn expect_forall<'a>(a: &'a Formula) -> Result<(&'a str, &'a Formula), TheoryError> {
     a.cases(
         || Err(TheoryError::NotForAll),
-        |_,_| Err(TheoryError::NotForAll),
-        |_,_| Err(TheoryError::NotForAll),
-        |x,b| Ok((x,b)))
+        |_, _| Err(TheoryError::NotForAll),
+        |_, _| Err(TheoryError::NotForAll),
+        |x, b| Ok((x, b)),
+    )
 }
 
 pub fn peel_forall(a: &Formula) -> Result<(String, Formula), TheoryError> {
-    let (x,f) = expect_forall(a)?;
+    let (x, f) = expect_forall(a)?;
     Ok((x.to_owned(), (*f).clone()))
 }
 
-pub fn peel_foralls(
-    a: &Formula,
-    count: usize,
-) -> Result<(Vec<String>, Formula), TheoryError> {
+pub fn peel_foralls(a: &Formula, count: usize) -> Result<(Vec<String>, Formula), TheoryError> {
     let mut vars = vec![];
     let mut f = a.clone();
     for _ in 0..count {
@@ -50,7 +58,7 @@ fn peel_foralls_until(a: &Formula, x: &str) -> Result<(Vec<String>, Formula), Th
     let mut vars = vec![];
     let mut f = a.clone();
     loop {
-        let (y,f2) = expect_forall(&f).map_err(|_|TheoryError::NotOuterVar(x.to_owned()))?;
+        let (y, f2) = expect_forall(&f).map_err(|_| TheoryError::NotOuterVar(x.to_owned()))?;
         if y == x {
             break;
         } else {
@@ -206,7 +214,7 @@ impl TheoremGen for Theorem {
             if x != y {
                 return Err(TheoryError::VarMismatch(x, y));
             }
-            let (h,b) = expect_imp(&ab)?;
+            let (h, b) = expect_imp(&ab)?;
             if *h != a {
                 return Err(TheoryError::WrongHyp);
             }
@@ -414,10 +422,7 @@ mod test {
     fn subst_gen_x_yz() {
         let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
         let t1 = t
-            .subst_gen(
-                &[Expr::var("y").add(Expr::var("z"))],
-                &v(&["z", "y"]),
-            )
+            .subst_gen(&[Expr::var("y").add(Expr::var("z"))], &v(&["z", "y"]))
             .unwrap();
         t1.check("@z(@y((y+z) + 0 = (y+z)))").unwrap();
     }
@@ -486,10 +491,7 @@ mod test {
             .check("@x(@y(@z(x = y -> x + z = y + z)))")
             .unwrap();
         let t2 = t1
-            .subst_gen(
-                &[Expr::var("x").add(num(0)), Expr::var("x")],
-                &v(&["x"]),
-            )
+            .subst_gen(&[Expr::var("x").add(num(0)), Expr::var("x")], &v(&["x"]))
             .unwrap()
             .check("@x(@z(x + 0 = x -> (x + 0) + z = x + z))")
             .unwrap();

@@ -1,0 +1,657 @@
+<html>
+	<head>
+	<meta charset="utf-8">
+	<script>
+'use strict';
+
+function contains_pair(list,x,y) {
+	if (list.length === 1 || list[1].startsWith('@')) {
+		return list[0] === x && list[0] === y;
+	} else {
+		for (var i = 0; i < list.length; i++) {
+			for (var j = 0; j < list.length; j++) {
+				if (i !== j && list[i] === x && list[j] === y) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+}
+
+function third_symbol(list,x,y) {
+	var result = '';
+	for (var sym of list) {
+		if (sym !== x && sym !== y) {
+			if (result !== '') result += ',';
+			if (sym.startsWith('@')) {
+				result += sym.substr(1);
+			} else {
+				result += sym;
+			}
+		}
+	}
+	return result;
+}
+
+function display_theorems(theorems, x, y) {
+	var table = document.querySelector('#theorems');
+	while (table.lastChild) {
+		table.removeChild(table.lastChild);
+	}
+
+	for (var thm of find_theorems(theorems, x, y)) {
+		var tr = document.createElement('tr');
+		var td = document.createElement('td');
+		td.textContent = thm[0];
+		tr.appendChild(td);
+		td = document.createElement('td');
+		td.textContent = thm[1];
+		tr.appendChild(td);
+		td = document.createElement('td');
+		td.textContent = thm[2];
+		tr.appendChild(td);
+		table.appendChild(tr);
+	}
+}
+
+function find_theorems(theorems, x, y) {
+	var result = [];
+	var lastname = undefined;
+	for (var theorem of theorems) {
+		if (theorem === undefined) {
+			throw 'theorem is undefined (last was ' + lastname + ')';
+		}
+		var name = theorem[0];
+		lastname = name;
+		var statement = theorem[1];
+		var list = theorem[2];
+		if (theorem.length !== 3) {
+			throw 'theorem.length !== 3 ' + name;
+		}
+		if (contains_pair(list, x, y)) {
+			var third = third_symbol(list, x, y);
+			result.push([third,name,statement]);
+		}
+	}
+	return result;
+}
+
+var the_table = 'nat'
+
+function fill_table() {
+	var headings, theorems;
+	if (the_table === 'nat') {
+		headings = ['0','1','2','S','P','+','-','<','<=','~=','*','min','max','div','mod','^','even','odd'];
+		theorems = [
+			// BinNat.v
+			['one_succ', '1 = succ 0',['1','0','S']],
+			['pred_0', 'pred 0 = 0',['0','P']],
+			['pred_succ', 'pred (succ n) = n',['P','S']],
+			['pred_sub', 'pred n = sub n 1',['P','-','1']],
+			['succ_0_discr', 'succ n <> 0',['0','~=','S']],
+			['add_0_l', '0 + n = n',['0','+']],
+			['add_succ_l', 'succ n + m = succ (n + m)',['S','+']],
+			['sub_0_r','n - 0 = n',['-','0']],
+			['sub_succ_r','n - succ m = pred (n - m)',['-','S','P']],
+			['mul_0_l','0 * n = 0',['0','*']],
+			['mul_succ_l','(succ n) * m = n * m + m',['S','*','+']],
+			['min_l','n <= m -> min n m = n',['<=','min']],
+			['min_r','m <= n -> min n m = m',['<=','min']],
+			['max_l','m <= n -> max n m = n',['<=','max']],
+			['max_r','n <= m -> max n m = m',['<=','max']],
+			['lt_succ_r','n < succ m <-> n <= m',['<=','<','S']],
+			['pow_0_r','n ^ 0 = 1',['0','1','^']],
+			['pow_succ_r','0<=p -> n^(succ p) = n * n^p',['S','^']],
+			["div_mod'",'a = b * (a/b) + (a mod b)',['*','div','mod']],
+			['div_mod','b<>0 -> a = b * (a/b) + (a mod b)',['*','div','mod']],
+			['mod_lt','b<>0 -> a mod b < b',['mod','<']],
+			['mod_bound_pos','0<=a -> 0<b -> 0 <= a mod b < b',['mod','<']],
+			['gt_lt_iff','n > m <-> m < n',['<']],
+			['gt_lt','n > m -> m < n',['<']],
+			['lt_gt','n < m -> m > n',['<']],
+			['ge_le_iff','n >= m <-> m <= n',['<=']],
+			['ge_le','n >= m -> m <= n',['<=']],
+			['le_ge','n <= m -> m >= n',['<=']],
+
+			// Mul.v
+			['mult_is_0','n * m = 0 -> n = 0 \\/ m = 0',['0','*']],
+			['mult_is_1','n * m = 1 -> n = 1 /\\ m = 1',['1','*']],
+			
+			// NZBase.v
+			['neq_sym','n ~= m -> m ~= n',['~=','~=']],
+			['succ_inj','S n1 == S n2 -> n1 == n2',['S']],
+			['succ_inj_wd','S n1 == S n2 <-> n1 == n2',['S']],
+			['succ_inj_wd_neg','S n ~= S m <-> n ~= m',['S','~=']],
+
+			// NBase.v
+			['neq_succ_0','S n ~= 0',['0','~=','S']],
+			['neq_0_succ','0 ~= S n',['0','~=','S']],
+			['le_0_l','0 <= n',['0','<=']],
+			['zero_or_succ','n == 0 \\/ exists m, n == S m',['0','S']],
+			['eq_pred_0','P n == 0 <-> n == 0 \\/ n == 1',['0','P']],
+			['succ_pred','n ~= 0 -> S (P n) == n',['S','P']],
+			['pred_inj','n ~= 0 -> m ~= 0 -> P n == P m -> n == m',['P']],
+
+			// NZAdd.v
+			['add_0_r', 'n + 0 == n',['+','0']],
+			['add_succ_r','n + S m == S (n + m)',['+','S']],
+			['add_succ_comm','S n + m == n + S m',['+','S']],
+			['add_comm','n + m == m + n',['+','+']],
+			['add_1_l','1 + n == S n',['1','S','+']],
+			['add_1_r','n + 1 == S n',['1','S','+']],
+			['add_assoc','n + (m + p) == (n + m) + p',['+','+']],
+			['add_cancel_l','p + n == p + m <-> n == m',['+','+']],
+			['add_cancel_r','n + p == m + p <-> n == m',['+','+']],
+			['sub_1_r','n - 1 == P n',['1','P','-']],
+
+			// NAdd.v
+			['eq_add_0', 'n + m == 0 <-> n == 0 /\\ m == 0', ['+','0']],
+			['eq_add_succ', "(exists p, n + m == S p) <-> (exists n', n == S n') \\/ (exists m', m == S m')",['+','S']],
+			['eq_add_1', 'n + m == 1 -> n == 1 /\\ m == 0 \\/ n == 0 /\\ m == 1', ['+','1','0']],
+			['succ_add_discr', 'm ~= S (n + m)',['+','S']],
+			['add_pred_l', 'n ~= 0 -> P n + m == P (n + m)',['+','P']],
+			['add_pred_r', 'm ~= 0 -> n + P m == P (n + m)',['+','P']],
+
+			// NZOrder
+			['lt_le_incl', 'n < m -> n <= m', ['<','<=']],
+			['le_refl', 'n <= n', ['<=']],
+			['lt_succ_diag_r', 'n < S n', ['<','S']],
+			['le_succ_diag_r', 'n <= S n', ['<=', 'S']],
+			['neq_succ_diag_l', 'S n ~= n', ['~=', 'S']],
+			['neq_succ_diag_r', 'n ~= S n', ['~=', 'S']],
+			['nlt_succ_diag_l', '~ S n < n', ['<', 'S']],
+			['nle_succ_diag_l', '~ S n <= n', ['<=', 'S']],
+			['le_succ_l', 'S n <= m <-> n < m', ['<=','<','S']],
+			['le_gt_cases', 'n <= m \\/ n > m', ['<=','<']],
+			['lt_trichotomy', 'n < m \\/ n == m \\/ m < n', ['<']],
+			['lt_asymm', 'n < m -> ~ m < n', ['<']],
+			['lt_trans', 'n < m -> m < p -> n < p', ['<']],
+			['le_trans', 'n <= m -> m <= p -> n <= p', ['<=']],
+			['lt_neq', 'n < m -> n ~= m', ['<','~=']],
+			['le_neq', 'n < m <-> n <= m /\\ n ~= m', ['<','<=','~=']],
+			['eq_le_incl', 'n == m -> n <= m', ['<=']],
+			['le_lt_trans', 'n <= m -> m < p -> n < p', ['<=','<']],
+			['lt_le_trans', 'n < m -> m <= p -> n < p', ['<=','<']],
+			['le_antisymm', 'n <= m -> m <= n -> n == m', ['<=']],
+			['le_succ_r', 'n <= S m <-> n <= m \\/ n == S m', ['<=','S']],
+			['lt_succ_l', 'S n < m -> n < m', ['<','S']],
+			['le_le_succ_r', 'n <= m -> n <= S m', ['<=','S']],
+			['lt_lt_succ_r', 'n < m -> n < S m', ['<','S']],
+			['succ_lt_mono', 'n < m <-> S n < S m', ['<','S']],
+			['succ_le_mono', 'n <= m <-> S n <= S m', ['<=','S']],
+			['lt_0_1', '0 < 1', ['0','1','<']],
+			['le_0_1', '0 <= 1', ['0','1','<=']],
+			['lt_1_l', '0 < n -> n < m -> 1 < m', ['0','1','<']],
+			['le_ge_cases', 'n <= m \\/ n >= m', ['<=']],
+			['lt_gt_cases', 'n ~= m <-> n < m \\/ n > m', ['~=','<']],
+
+			// NOrder
+			['nlt_0_r', '~ n < 0', ['<','0']],
+			['nle_succ_0', '~ (S n <= 0)', ['<=','S','0']],
+			['le_0_r', 'n <= 0 <-> n == 0', ['<=','0']],
+			['lt_0_succ', '0 < S n', ['0','<','S']],
+			['neq_0_lt_0', 'n ~= 0 <-> 0 < n', ['~=','0','<']],
+			['eq_0_gt_0_cases', 'n == 0 \\/ 0 < n', ['0','<']],
+			['zero_one', 'n == 0 \\/ n == 1 \\/ 1 < n', ['0','1','<']],
+			['lt_1_r','n < 1 <-> n == 0', ['<','1','0']],
+			['le_1_r','n <= 1 <-> n == 0 \\/ n == 1', ['<=','1','0']],
+			['lt_lt_0','n < m -> 0 < m',['<','0']],
+			["lt_1_l'",'n < m -> m < p -> 1 < p',['<','1']],
+			['succ_pred_pos','0 < n -> S (P n) == n',['<','S','P']],
+			['le_pred_l','P n <= n',['<=','P']],
+			['lt_pred_l','n ~= 0 -> P n < n',['<','P']],
+			['le_le_pred','n <= m -> P n <= m',['<=','P']],
+			['lt_lt_pred','n < m -> P n < m',['<','P']],
+			['lt_le_pred','n < m -> n <= P m',['<','<=','P']],
+			['lt_pred_le','P n < m -> n <= m',['<','<=','P']],
+			['lt_pred_lt','n < P m -> n < m',['<','P']],
+			['le_pred_le','n <= P m -> n <= m',['<=','P']],
+			['pred_le_mono','n <= m -> P n <= P m',['<=','P']],
+			['pred_lt_mono','n ~= 0 -> (n < m <-> P n < P m)',['<','P']],
+			['lt_succ_lt_pred','S n < m <-> n < P m',['S','P','<']],
+			['le_succ_le_pred','S n <= m -> n <= P m',['S','P','<=']],
+			['lt_pred_lt_succ','P n < m -> n < S m',['S','P','<']],
+			['le_pred_le_succ','P n <= m <-> n <= S m',['S','P','<=']],
+
+			// NZAddOrder.v
+			['add_lt_mono_l', 'n < m <-> p + n < p + m', ['<','+']],
+			['add_lt_mono_r', 'n < m <-> n + p < m + p', ['<','+']],
+			['add_lt_mono', 'n < m -> p < q -> n + p < m + q', ['<','+']],
+			['add_le_mono_l', 'n <= m <-> p + n <= p + m', ['<=','+']],
+			['add_le_mono_r', 'n <= m <-> n + p <= m + p', ['<=','+']],
+			['add_le_mono', 'n <= m -> p <= q -> n + p <= m + q', ['<=','+']],
+			['add_lt_le_mono', 'n < m -> p <= q -> n + p < m + q', ['<','<=','+']],
+			['add_le_lt_mono', 'n <= m -> p < q -> n + p < m + q', ['<','<=','+']],
+
+			// NAddOrder.v
+			['le_add_r','n <= n + m',['<=','+']],
+			['lt_lt_add_r','n < m -> n < m + p',['<','+']],
+			['lt_lt_add_l','n < m -> n < p + m',['<','+']],
+
+			//GenericMinMax.v
+			['max_id','max n n == n',['max']],
+			['max_assoc','max m (max n p) == max (max m n) p',['max']],
+			['max_comm','max n m == max m n',['max']],
+			['le_max_l','n <= max n m',['max','<=']],
+			['le_max_r','m <= max n m',['max','<=']],
+			['max_l_iff','max n m == n <-> m <= n',['max','<=']],
+			['max_r_iff','max n m == m <-> n <= m',['max','<=']],
+			['max_le','p <= max n m -> p <= n \\/ p <= m',['max','<=']],
+			['max_le_iff','p <= max n m <-> p <= n \\/ p <= m',['max','<=']],
+			['max_lt_iff','p < max n m <-> p < n \\/ p < m',['max','<']],
+			['max_lub_l','max n m <= p -> n <= p',['max','<=']],
+			['max_lub_r','max n m <= p -> m <= p',['max','<=']],
+			['max_lub','n <= p -> m <= p -> max n m <= p',['max','<=']],
+			['max_lub_iff','max n m <= p <-> n <= p /\\ m <= p',['max','<=']],
+			['max_lub_lt','n < p -> m < p -> max n m < p',['max','<']],
+			['max_lub_lt_iff','max n m < p <-> n < p /\\ m < p',['max','<']],
+			['max_le_compat_l','n <= m -> max p n <= max p m',['max','<=']],
+			['max_le_compat_r','n <= m -> max n p <= max m p',['max','<=']],
+			['max_le_compat','n <= m -> p <= q -> max n p <= max m q',['max','<=']],
+			['min_id','min n n == n',['min']],
+			['min_assoc','min m (min n p) == min (min m n) p',['min']],
+			['min_comm','min n m == min m n',['min']],
+			['le_min_r','min n m <= m',['min','<=']],
+			['le_min_l','min n m <= n',['min','<=']],
+			['min_l_iff','min n m == n <-> n <= m',['min','<=']],
+			['min_r_iff','min n m == m <-> m <= n',['min','<=']],
+			['min_le','min n m <= p -> n <= p \\/ m <= p',['min','<=']],
+			['min_le_iff','min n m <= p <-> n <= p \\/ m <= p',['min','<=']],
+			['min_lt_iff','min n m < p <-> n < p \\/ m < p',['min','<']],
+			['min_glb_l','p <= min n m -> p <= n',['min','<=']],
+			['min_glb_r','p <= min n m -> p <= m',['min','<=']],
+			['min_glb','p <= n -> p <= m -> p <= min n m',['min','<=']],
+			['min_glb_iff','p <= min n m <-> p <= n /\\ p <= m',['min','<=']],
+			['min_glb_lt','p < n -> p < m -> p < min n m',['min','<']],
+			['min_glb_lt_iff','p < min n m <-> p < n /\\ p < m',['min','<']],
+			['min_le_compat_l','n <= m -> min p n <= min p m',['min','<=']],
+			['min_le_compat_r','n <= m -> min n p <= min m p',['min','<=']],
+			['min_le_compat','n <= m -> p <= q -> min n p <= min m q',['min','<=']],
+			['min_max_absorption','max n (min n m) == n',['min','max']],
+			['max_min_absorption','min n (max n m) == n',['min','max']],
+			['max_min_distr','max n (min m p) == min (max n m) (max n p)',['min','max']],
+			['min_max_distr','min n (max m p) == max (min n m) (min n p)',['min','max']],
+			['max_min_modular','max n (min m (max n p)) == min (max n m) (max n p)',['min','max']],
+			['min_max_modular','min n (max m (min n p)) == max (min n m) (min n p)',['min','max']],
+			['max_min_disassoc','min n (max m p) <= max (min n m) p',['min','max']],
+
+			// NMaxMin.v
+			['max_0_l','max 0 n == n',['max','0']],
+			['max_0_r','max n 0 == n',['max','0']],
+			['min_0_l','min 0 n == 0',['min','0']],
+			['min_0_r','min n 0 == 0',['min','0']],
+			['succ_max_distr','S (max n m) == max (S n) (S m)',['max','S']],
+			['succ_min_distr','S (min n m) == min (S n) (S m)',['min','S']],
+			['add_max_distr_l','max (p + n) (p + m) == p + max n m',['max','+']],
+			['add_max_distr_r','max (n + p) (m + p) == max n m + p',['max','+']],
+			['add_min_distr_l','min (p + n) (p + m) == p + min n m',['min','+']],
+			['add_min_distr_r','min (n + p) (m + p) == min n m + p',['min','+']],
+			['mul_max_distr_l','max (p * n) (p * m) == p * max n m',['max','*']],
+			['mul_max_distr_r','max (n * p) (m * p) == max n m * p',['max','*']],
+			['mul_min_distr_l','min (p * n) (p * m) == p * min n m',['min','*']],
+			['mul_min_distr_r','min (n * p) (m * p) == min n m * p',['min','*']],
+			['sub_max_distr_l','max (p - n) (p - m) == p - min n m',['max','-']],
+			['sub_max_distr_r','max (n - p) (m - p) == max n m - p',['max','-']],
+			['sub_min_distr_l','min (p - n) (p - m) == p - max n m',['min','-']],
+			['sub_min_distr_r','min (n - p) (m - p) == min n m - p',['min','-']],
+
+			// NSub.v
+			['sub_0_l','0 - n == 0',['-','0']],
+			['sub_succ','S n - S m == n - m',['S','-']],
+			['sub_diag','n - n == 0',['-','0']],
+			['sub_gt','n > m -> n - m ~= 0',['-','>','~=']],
+			['add_sub_assoc','p <= n -> n + (m - p) == (n + m) - p',['+','-']],
+			['sub_succ_l','n <= m -> S m - n == S (m - n)',['S','-']],
+			['add_sub','(n + m) - m == n',['+','-']],
+			['sub_add','n <= m -> (m - n) + n == m',['+','-']],
+			['add_sub_eq_l','m + p == n -> n - m == p',['+','-']],
+			['add_sub_eq_r','m + p == n -> n - p == m',['+','-']],
+			['add_sub_eq_nz','p ~= 0 -> n - m == p -> m + p == n',['+','-']],
+			['sub_add_distr','n - (m + p) == (n - m) - p',['+','-']],
+			['add_sub_swap','p <= n -> n + m - p == n - p + m',['+','-']],
+			['le_sub_l', 'n - m <= n',['-','<=']],
+			['sub_0_le', 'n - m == 0 <-> n <= m',['-','<=','0']],
+			['sub_add_le','n <= n - m + m',['-','+','<=']],
+			['le_sub_le_add_r','n - p <= m <-> n <= m + p',['-','+','<=']],
+			['le_sub_le_add_l','n - m <= p <-> n <= m + p',['-','+','<=']],
+			['lt_sub_lt_add_r','n - p < m -> n < m + p',['-','+','<']],
+			['lt_sub_lt_add_l','n - m < p -> n < m + p',['-','+','<']],
+			['le_add_le_sub_r','n + p <= m -> n <= m - p',['-','+','<=']],
+			['le_add_le_sub_l','n + p <= m -> p <= m - n',['-','+','<=']],
+			['lt_add_lt_sub_r','n + p < m <-> n < m - p',['-','+','<']],
+			['lt_add_lt_sub_l','n + p < m <-> p < m - n',['-','+','<']],
+			['sub_lt','m <= n -> 0 < m -> n - m < n',['-','<','0']],
+			['sub_le_mono_r','n <= m -> n-p <= m-p',['-','<=']],
+			['sub_le_mono_l','n <= m -> p-m <= p-n',['-','<=']],
+			['mul_pred_r','n * (P m) == n * m - n',['-','*']],
+			['mul_sub_distr_r','(n - m) * p == n * p - m * p',['-','*']],
+			['mul_sub_distr_l','p * (n - m) == p * n - p * m',['-','*']],
+
+			//NZMul
+			['mul_add_distr_l','(n + m) * p == n * p + m * p',['*','+']],
+			['mul_add_distr_r','n * (m + p) == n * m + n * p',['*','+']],
+			['mul_1_l','1 * n == n',['*','1']],
+			['mul_1_r','n * 1 == n',['*','1']],
+
+			// My code
+			['!lt_pred_lt_succ_conv','n < N.succ m -> N.pred n < m',['S','P','<']],
+			['!pred_ne','n<>0 -> m<>0 -> n<>m -> N.pred n <> N.pred m',['P','<>']],
+			['!mult_lt_mono_plus','little<a -> b<c -> a * b + little < a * c',['*','+','<']],
+			['!squash_min_l','N.min a (N.min a b) = N.min a b',['min']],
+			['!squash_min_r','N.min (N.min a b) b = N.min a b',['min']],
+			['!plus_le_weaken_l','a + b <= c -> a <= c',['+','<=']],
+			["!plus_le_weaken_r'",'a <= b -> a <= b + c',['+','<=']],
+			["!add_sub'",'a < b -> a < b + c',['+','<']],
+			["!sub_add'",'m <= n -> m + (n - m) = n',['+','<']],
+	      		['!le_add_l',"n <= m + n",['<=','+']],
+	      		['!ge_succ_implies_succ','N.succ m <= n -> exists x, n = N.succ x',['S','<=']],
+	      		['!min_add_sub','N.min a b + (a - b) = a',['min','+','-']],
+	      		['!lt_min_r','a < N.min b c -> a < c',['min','<']],
+	      		['!le_min_self_r','m <= n -> m <= N.min n m',['min','<=']],
+			['!succ_lt_mono_strip','n < m -> N.succ n < N.succ m',['S','<']],
+			['!succ_succ_lt_1','1 < N.succ (N.succ n)',['S','1']],
+			['!succ_succ_ne_1','N.succ (N.succ n) <> 1',['S','1']],
+			['!lt_diag','~(a < a)',['<']],
+			['!le_gt','a <= b -> b < a -> False',['<','<=']],
+			['!pot_nonzero','2^n <> 0',['^','0']],
+			['!mod_pot_upper_bound','x mod (2^n) < 2^n',['^','mod']],
+			['!sub_succ_diag','N.succ n - n = 1',['-','1','S']],
+
+			// NZParity.v
+			['Even_or_Odd','Even x \\/ Odd x',['even','odd']],
+			['even_add','even (n+m) = eqb (even n) (even m)',['even','+']],
+			['even_mul','even (n*m) = even n || even m',['even','*']],
+			['even_spec','even n = true <-> Even n',['even']],
+			['odd_spec','odd n = true <-> Odd n',['odd']],
+			['even_2','even 2 = true',['even','2']],
+			['even_succ','even (S n) = odd n',['even','odd','S']],
+			['even_succ_succ','even (S (S n)) = even n',['even','S']],
+			['odd_succ','odd (S n) = even n',['even','odd','S']],
+			['odd_succ_succ','odd (S (S n)) = odd n',['odd','S']],
+	      		['negb_even','negb (even n) = odd n',['even','odd']],
+	      		['negb_odd','negb (odd n) = even n',['even','odd']],
+
+			// NDiv.v
+			['div_mul','b~=0 -> (a*b)/b == a',['*','div']],
+		];
+	} else if (the_table === 'list') {
+		headings = ['[]','::','++','len','hd','tl','nth','in','box','ex','all','repl','take','drop','map','filt','lw','tw','dw'];
+		theorems = [
+			// List.v
+			['nil_cons','[] <> x :: l',['::','[]']],
+			['hd_error_some_nil','hd_error l = Some a -> l <> nil',['hd','[]']],
+			['length_zero_iff_nil','length l = 0 <-> l=[]',['length','[]']],
+			['hd_error_nil','hd_error (@nil A) = None',['hd','[]']],
+			['hd_error_cons','hd_error (x::l) = Some x',['hd','::']],
+			['in_eq','In a (a :: l)',['in','::']],
+			['in_cons','In b l -> In b (a :: l)',['in','::']],
+			['not_in_cons','~ In x (a::l) <-> x<>a /\\ ~ In x l',['in','::']],
+			['in_nil','~ In a []',['in','[]']],
+			['in_split','In x l -> exists l1 l2, l = l1++x::l2',['in','++']],
+			['in_inv','In b (a :: l) -> a = b \\/ In b l',['in','::']],
+			['in_dec','{In a l} + {~ In a l}',['in']],
+			['app_cons_not_nil','[] <> x ++ a :: y',['[]','++','::']],
+			['app_nil_l','[] ++ l = l',['[]','++']],
+			['app_nil_r','l ++ [] = l',['[]','++']],
+			['app_assoc','l ++ m ++ n = (l ++ m) ++ n',['++']],
+			['app_comm_cons','a :: (x ++ y) = (a :: x) ++ y',['::','++']],
+			['app_inj_tail','x ++ [a] = y ++ [b] -> x = y /\ a = b',['++','box']],
+			['in_app_or','In a (l ++ m) -> In a l \\/ In a m',['in','++']],
+			['in_or_app','In a l \\/ In a m -> In a (l ++ m)',['in','++']],
+			['in_app_iff',"In a (l++l') <-> In a l \\/ In a l'",['in','++']],
+			['app_inv_head','l ++ l1 = l ++ l2 -> l1 = l2',['++']],
+			['app_inv_tail','l1 ++ l = l2 ++ l -> l1 = l2',['++']],
+			['map_cons','map (x::l) = (f x) :: (map l)',['::','map']],
+			['in_map','In x l -> In (f x) (map l)',['in','map']],
+			['in_map_iff','In y (map l) <-> exists x, f x = y /\ In x l',['in','map']],
+			['map_app',"map (l++l') = (map l)++(map l')",['map','++']],
+			['map_eq_nil','map l = [] -> l = []',['map','[]']],
+			['map_id','map (fun x => x) l = l',['map']],
+			['map_map','map (fun x => g (f x)) l',['map']],
+			['map_ext_in','(forall a, In a l -> f a = g a) -> map f l = map g l',['map','in']],
+			['map_ext','(forall a, f a = g a) -> forall l, map f l = map g l',['map']],
+			['existsb_exists','existsb l = true <-> exists x, In x l /\\ f x = true',['ex','in']],
+			['existsb_app','existsb (l1++l2) = existsb l1 || existsb l2',['ex','++']],
+			['forallb_forall','forallb l = true <-> (forall x, In x l -> f x = true)',['all','in']],
+			['forallb_app','forallb (l1++l2) = forallb l1 && forallb l2',['all','++']],
+			['filter_In','In x (filter l) <-> In x l /\\ f x = true',['filt','in']],
+
+			// My code
+			// ! indicates my code
+			// * indicates some hypotheses have been omitted for brevity
+			// @ indicates symbol is not used for lookup
+			['!replace_0','replace 0 (x::xs) y = y :: xs', ['repl','::']],
+			['!replace_ind','replace (N.succ n) (x::xs) y = x :: replace n xs y',['repl','::']],
+			['!replace_pred','replace n (x::xs) y = x :: replace (N.pred n) xs y',['repl','::','@pred']],
+			['!lengthn_empty','lengthn [] = 0',['len','[]']],
+			['!lengthn_cons','lengthn (x::xs) = N.succ (lengthn xs)',['len','::']],
+			['!nthe_empty','nthe n [] = None',['nth','[]']],
+			['!nthe_cons','nthe (N.succ n) (x::xs) = nthe n xs',['nth','::']],
+			['!nthe0_cons','nthe 0 (x::xs) = Some x',['nth','::']],
+			['!nthe_pred','nthe n (x::xs) = nthe (N.pred n) xs',['nth','::']],
+			['!nthe_some','n < lengthn xs -> is_some (nthe n xs)',['nth','len']],
+			['!nthe_bound','nthe n xs = None -> lengthn xs <= n',['nth','len']],
+			['!nthe_overflow','lengthn xs <= n -> nthe n xs = None',['nth','len']],
+			['!replace_len','n<lengthn xs -> lengthn (replace n xs y) = lengthn xs',['repl','len']],
+			['!lengthn_zero_iff_nil','lengthn xs = 0 <-> xs=[]',['len','[]']],
+			['!lists_eq_error','(forall n, nthe n xs = nthe n ys) -> xs = ys',['nth']],
+			['!lists_eq_e','lengthn xs = lengthn ys -> (forall n, n < lengthn xs -> nthe n xs = nthe n ys) -> xs = ys',['nth','len']],
+			['!*replace_replace','replace n (replace n xs y) z = replace n xs z',['repl']],
+			['!*reorder_replace','replace n (replace m xs y) z = replace m (replace n xs z) y',['repl']],
+			['!app_singleton','[x] ++ xs = x :: xs',['++','box','::']],
+			['!*nth_app_l','nthe n (xs ++ ys) = nthe n xs',['nth','++']],
+			['!nth_app_r','nthe (lengthn xs + n) (xs ++ ys) = nthe n ys',['nth','len','++']],
+			['!*nth_app_r','nthe n (xs ++ ys) = nthe (n - lengthn xs) ys',['nth','len','++']],
+			['!cons_equal_iff','x::xs = y::ys <-> x=y /\\ xs=ys',['::']],
+			['!app_lengthn','lengthn (xs ++ ys) = lengthn xs + lengthn ys',['++','len']],
+			['!take_0','take 0 xs = []',['take','[]']],
+			['!drop_0','drop 0 xs = xs',['drop']],
+			['!take_empty','take n [] = []',['take','[]']],
+			['!drop_empty','drop n [] = []',['drop','[]']],
+			['!take_cons','take (N.succ n) (x::xs) = x :: take n xs',['take','::']],
+			['!drop_cons','drop (N.succ n) (x::xs) = drop n xs',['drop','::']],
+			['!take_pred','take n (x::xs) = x :: take (N.pred n) xs',['take','::','@pred']],
+			['!drop_pred','drop n (x::xs) = drop (N.pred n) xs',['drop','::']],
+			['!take_app_exact','take (lengthn xs) (xs ++ ys) = xs',['take','++']],
+			['!drop_app_exact','drop (lengthn xs) (xs ++ ys) = ys',['drop','++']],
+			['!take_all_exact','take (lengthn xs) xs = xs',['take','len']],
+			['!drop_all_exact','drop (lengthn xs) xs = []',['drop','len','[]']],
+			['!take_app_drop','take n xs ++ drop n xs = xs',['take','drop','++']],
+			['!strip_take','drop n xs = ys -> xs = take n xs ++ ys',['take','drop','++']],
+			['!length_take_bounded','n <= lengthn xs -> lengthn (take n xs) = n',['len','take']],
+			['!lists_eq_take_drop','(drop n xs = drop n ys) -> (take n xs = take n ys) -> xs = ys.',['take','drop']],
+			['!drop_app_fewer','n <= lengthn xs -> drop n (xs ++ ys) = drop n xs ++ ys',['drop','++']],
+			['!take_app_fewer','n <= lengthn xs -> take n (xs ++ ys) = take n xs',['take','++']],
+			['!take_all','lengthn xs <= n -> take n xs = xs',['take','len']],
+			['!drop_all','lengthn xs <= n -> drop n xs = []',['drop','len','[]']],
+			['!take_canonical','take n xs = take (N.min (lengthn xs) n) xs',['take','@min']],
+			['!drop_canonical','drop n xs = drop (N.min (lengthn xs) n) xs',['drop','@min']],
+			['!length_take','lengthn (take n xs) = N.min (lengthn xs) n',['take','len','@min']],
+			['!length_drop','lengthn (drop n xs) = lengthn xs - n',['drop','len']],
+			['!length_take_le','lengthn (take n xs) <= n',['take','len']],
+			['!take_take_same','take n (take n xs) = take n xs',['take']],
+			["!take_app_more'",'take (lengthn xs + n) (xs ++ ys) = xs ++ take n ys',['take','++']],
+			["!drop_app_more'",'drop (lengthn xs + n) (xs ++ ys) = drop n ys',['drop','++']],
+			['!take_app_more','lengthn xs <= n -> take n (xs ++ ys) = xs ++ take (n - lengthn xs) ys',['take','++','@-']],
+			['!drop_app_more','lengthn xs <= n -> drop n (xs ++ ys) = drop (n - lengthn xs) ys',['drop','++','@-']],
+			['!take_plus','take (m+n) xs = take m xs ++ take n (drop m xs)',['take','drop','++']],
+			["!take_take_le'",'take m (take (m+n) xs) = take m xs',['take']],
+			['!take_take_le','m<=n -> take m (take n xs) = take m xs',['take']],
+			['!take_take_ge','n<=m -> take m (take n xs) = take n xs',['take']],
+			['!take_take','take m (take n xs) = take (N.min m n) xs',['take','@min']],
+			['!drop_drop','drop n (drop m xs) = drop (m+n) xs',['drop','@+']],
+			['!take_comm','take m (take n xs) = take n (take m xs)',['take']],
+			['!drop_comm','drop m (drop n xs) = drop n (drop m xs)',['drop']],
+			['!*drop_take_plus_bounded','drop m (take (m+n) xs) = take n (drop m xs)',['take','drop']],
+			['!*drop_take','drop m (take n xs) = take (n-m) (drop m xs)',['take','drop','@-']],
+			["!*take_plus'",'take (m+n) xs = take m xs ++ drop m (take (m+n) xs)',['take','++','drop']],
+			['!*take_app_drop_take','m<=n -> take n xs = take m xs ++ drop m (take n xs)',['take','++','drop']],
+			['!take_drop_app_drop','take m (drop n xs) ++ drop (m + n) xs = drop n xs',['take','++','drop']],
+			['!drop_empty_implies_overflow','drop n xs = [] -> lengthn xs <= n',['drop','[]','len']],
+			['!take_full_implies_overflow','take n xs = xs -> lengthn xs <= n',['take','len']],
+			['!take_empty_implies','take n xs = [] -> xs = [] \\/ n = 0',['take','[]']],
+			['!*take_drop_take','take a (drop b (take c xs)) = take a (drop b xs)',['take','drop']],
+			['!tail_as_drop','tail xs = drop 1 xs',['drop','tl']],
+			['!hde_take_succ','hd_error (take (N.succ n) xs) = hd_error xs',['take','hd']],
+			['!hd_eq_if_take_eq','take 1 xs = take 1 ys -> hd def xs = hd def ys',['take','hd']],
+			['!hde_eq_if_take_eq','take 1 xs = take 1 ys -> hd_error xs = hd_error ys',['take','hd']],
+			['!box_inj','[x] = [y] -> x = y',['box']],
+			["!hd_as_take'",'take 1 xs = [y] -> hd_error xs = Some y',['hd','take','box']],
+			['!nthe_as_hd','nthe n xs = hd_error (drop n xs)',['nth','hd','drop']],
+			['!nthe_take','m<n -> nthe m (take n xs) = nthe m xs',['nth','take']],
+			['!nthe_drop','nthe m (drop n xs) = nthe (m+n) xs',['nth','drop']],
+			['!nthe_drop_sub','n<=m -> nthe (m-n) (drop n xs) = nthe m xs',['nth','drop','@-']],
+			['!hd_as_take','hd_error xs = Some y -> take 1 xs = [y]',['hd','take','box']],
+			['!take_app_nthe','nthe n xs = Some y -> take n xs ++ [y] = take (N.succ n) xs',['nth','take','box']],
+			['!*replace_as_take_drop','replace n xs v = take n xs ++ [v] ++ drop (n+1) xs',['replace','take','drop']],
+			['!replace_app_fewer','n < lengthn xs -> replace n (xs ++ ys) v = replace n xs v ++ ys',['replace','++']],
+			["!*replace_app_more'",'replace (lengthn xs + n) (xs ++ ys) v = xs ++ replace n ys v',['replace','++']],
+			['!drop_tl','drop (N.succ n) xs = tl (drop n xs)',['tl','drop']],
+			["!drop_tl'",'drop (N.succ n) xs = drop n (tl xs)',['tl','drop']],
+			['!hd_cons_drop','hd_error (drop n xs) = Some x -> x :: drop (N.succ n) xs = drop n xs',['hd','::','drop']],
+			['!map_lengthn','lengthn (map f xs) = lengthn xs',['map','len']],
+			['!take_map','take n (map f xs) = map f (take n xs)',['map','take']],
+			['!drop_map','drop n (map f xs) = map f (drop n xs)',['map','drop']],
+			['!takewhile_cons_true','P x = true -> takewhile (x::xs) = x::takewhile xs',['tw','::']],
+			['!takewhile_cons_false','P x = false -> takewhile (x::xs) = []',['tw','::']],
+			['!dropwhile_cons_true','P x = true -> dropwhile (x::xs) = dropwhile xs',['dw','::']],
+			['!dropwhile_cons_false','P x = false -> dropwhile (x::xs) = x::xs',['dw','::']],
+			['!lengthwhile_cons_true','P x = true -> lengthwhile (x::xs) = N.succ (lengthwhile xs)',['lw','::']],
+			['!lengthwhile_cons_false','P x = false -> lengthwhile (x::xs) = 0',['lw','::']],
+			['!take_lengthwhile','takewhile xs = take (lengthwhile xs) xs',['take','tw','lw']],
+			['!drop_lengthwhile','dropwhile xs = drop (lengthwhile xs) xs',['drop','dw','lw']],
+			['!takewhile_app_dropwhile','takewhile xs ++ dropwhile xs = xs',['tw','dw']],
+			['!anyb_empty','existsb P [] = false',['ex','[]']],
+			['!allb_empty','forallb P [] = true',['all','[]']],
+			['!anyb_cons_true','P x = true -> existsb P (x :: xs) = true',['ex','::']],
+			['!allb_cons_true','P x = true -> forallb P (x :: xs) = forallb P xs',['all','::']],
+			['!anyb_cons_false','P x = false -> existsb P (x :: xs) = existsb P xs',['any','::']],
+			['!allb_cons_false','P x = false -> forallb P (x :: xs) = false',['all','::']],
+			['!allb_cons_l','forallb P (x :: xs) = true -> P x = true',['all','::']],
+			['!anyb_cons_l','existsb P (x :: xs) = false -> P x = false',['any','::']],
+			['!allb_cons_r','forallb P (x :: xs) = true -> forallb P xs = true',['all','::']],
+			['!allb_app_true','forallb P xs = true -> forallb P ys = true -> forallb P (xs ++ ys) = true',['all','++']],
+			['!allb_app_true_l','forallb P (xs ++ ys) = true -> forallb P xs = true',['all','++']],
+			['!allb_app_true_r','forallb P (xs ++ ys) = true -> forallb P ys = true',['all','++']],
+			['!allb_app_false_l','forallb P xs = false -> forallb P (xs ++ ys) = false',['all','++']],
+			['!allb_app_false_r','forallb P ys = false -> forallb P (xs ++ ys) = false',['all','++']],
+			['!allb_app_false','forallb P (xs ++ ys) = false -> forallb P xs = false \\/ forallb P ys = false',['all','++']],
+			['!all_takewhile','forallb P (takewhile P xs) = true',['all','tw']],
+			['!dropwhile_all','forallb P xs = true -> dropwhile P xs = []',['all','dw','[]']],
+			['!hd_dropwhile','forallb P xs = false -> exists x, hd_error (dropwhile P xs) = Some x /\\ P x = false',['all','hd','dw']],
+			['!takewhile_all','forallb P xs = true -> takewhile P xs = xs',['all','tw']],
+			["!dropwhile_all'",'dropwhile P xs = [] -> forallb P xs = true',['all','dw','[]']],
+			["!takewhile_all'",'takewhile P xs = xs -> forallb P xs = true',['tw','all']],
+			['!lengthwhile_all_le','lengthn xs <= lengthwhile P xs -> forallb P xs = true',['lw','len','all']],
+			["!lengthwhile_all'",'lengthn xs = lengthwhile P xs -> forallb P xs = true',['lw','len','all']],
+			["!lengthwhile_all",'forallb P xs = true -> lengthwhile P xs = lengthn xs',['lw','len','all']],
+			['!lengthwhile_le','lengthwhile P xs <= lengthn xs',['lw','len']],
+			['!length_takewhile','lengthn (takewhile P xs) = lengthwhile P xs',['len','tw','lw']],
+			['!lengthwhile_incr','lengthwhile P xs <= lengthwhile P (xs ++ ys)',['lw','++']],
+			['!lengthwhile_more','lengthn xs <= lengthwhile P (xs ++ ys)',['len','lw','++']],
+			['!lengthwhile_take_le','lengthwhile P (take n xs) <= lengthwhile P xs',['lw','take']],
+			['!lengthwhile_lt','forallb P xs = false -> lengthwhile P xs < lengthn xs',['lw','len','all']],
+			["!lengthwhile_lt'",'lengthwhile P xs < lengthn xs -> forallb P xs = false',['lw','len','all']],
+			['!*nthe_all','forallb P xs = true -> fussy P (nthe n xs) = true',['all','nth']],
+			['!nthe_lt_lengthwhile','n < lengthwhile P xs -> fussy P (nthe n xs) = true',['lw','nth']],
+			['!allb_box','forallb P [x] = P x',['all','box']],
+			['!lengthwhile_through_true','forallb P xs = true -> lengthwhile P (xs ++ ys) = lengthn xs + lengthwhile P ys',['all','lw','++']],
+			['!takewhile_through_true','forallb P xs = true -> takewhile P (xs ++ ys) = xs ++ takewhile P ys',['all','tw','++']],
+			['!dropwhile_through_true','forallb P xs = true -> dropwhile P (xs ++ ys) = dropwhile P ys',['all','dw','++']],
+			['!lengthwhile_through_false','forallb P xs = false -> lengthwhile P (xs ++ ys) = lengthwhile P xs',['all','lw','++']],
+			['!lengthwhile_before_false','P y = false -> lengthwhile P (xs ++ y :: zs) = lengthwhile P xs',['lw','++']],
+			['!lengthwhile_take','lengthwhile P xs < n -> lengthwhile P (take n xs) = lengthwhile P xs',['lw','take']],
+			['!*lengthwhile_through_take','forallb P (take n xs) = true -> n <= lengthwhile P xs',['lw','take']],
+			['!*take_gt_lengthwhile','lengthwhile P xs < n -> forallb P (take n xs) = false',['lw','all','take']],
+			['!take_succ_lengthwhile','forallb P xs = false -> forallb P (take (N.succ (lengthwhile P xs)) xs) = false',['all','take','lw']],
+			['!allb_take','forallb P xs = true -> forallb P (take n xs) = true',['all','take']],
+			['!allb_take_between_lt','forallb P (take m xs) = true -> forallb P (take n xs) = false -> m < n',['all','take']],
+			['!allb_take_between','forallb P (take m xs) = true -> forallb P (take n xs) = false -> forallb P (take (n-m) (drop m xs)) = false',['all','take']],
+			['!hd_is_allb_take_1','unfussy P (hd_error xs) = forallb P (take 1 xs)',['all','take','hd']],
+			['!nthe_is_allb_take_1','unfussy P (nthe n xs) = forallb P (take 1 (drop n xs))',['nth','all','take','drop']],
+			['!*fussy_unfussy_nthe','fussy P (nthe n xs) = unfussy P (nthe n xs)',['nth']],
+			['!*nthe_lengthwhile','fussy P (nthe (lengthwhile P xs) xs) = false',['nth','lw']],
+			['!filter_ind_false','P x = false -> filter P (x::xs) = filter P xs',['filt','::']],
+			['!filter_ind_true','P x = true -> filter P (x::xs) = x :: filter P xs',['filt','::']],
+			['!*filter_dropwhile','filter P (dropwhile Q xs) = filter P xs',['filt','dw']],
+			['!filter_app','filter P (xs ++ ys) = filter P xs ++ filter P ys',['filt','++']],
+			['!filter_none','filter P xs = [] -> existsb P xs = false',['filt','ex','[]']],
+			['!*split_into_three','exists ys z zs, xs = ys ++ z :: zs /\\ lengthn ys = n /\\ Some z = nthe n xs',['++','nth','len']],
+			['!*split_into_three_while','exists ys z zs, xs = ys ++ z :: zs /\\ forallb Q ys = true /\\ lengthn ys = lengthwhile Q xs /\\ Q z = false',['++','lw','all']]
+		];
+
+	}
+
+	var table = document.getElementById('nat');
+
+	while (table.lastChild) {
+		table.removeChild(table.lastChild);
+	}
+
+	var tr,td;
+	tr = document.createElement('tr');
+	td = document.createElement('td');
+	tr.appendChild(td);
+	for (var x of headings) {
+		td = document.createElement('td');
+		td.textContent = x;
+		tr.appendChild(td);
+	}
+	table.appendChild(tr);
+
+	for (let y = 0; y < headings.length; y++) {
+		tr = document.createElement('tr');
+		td = document.createElement('td');
+		let hy = headings[y];
+		td.textContent = hy;
+		tr.appendChild(td);
+		for (let x = 0; x < headings.length; x++) {
+			td = document.createElement('td');
+			td.id = x + '_' + y;
+			let hx = headings[x];
+			td.onmousedown = () => display_theorems(theorems, hx, hy);
+			if (find_theorems(theorems, hx, hy).length > 0) {
+				td.classList.add('hasTheorem');
+			}
+			tr.appendChild(td);
+		}
+		table.appendChild(tr);
+	}
+}
+
+window.onload = fill_table;
+
+function select_table(table) {
+	the_table = table;
+	fill_table();
+}
+
+	</script>
+<style>
+
+table {
+	border-collapse: collapse;
+}
+td {
+	border: solid black 1px;
+}
+table.small td {
+	width: 40px;
+	height: 30px;
+}
+td.hasTheorem {
+	background: #bdf;
+}
+
+</style>
+	</head>
+	<body>
+		<input type="button" value="nat" onclick="select_table('nat')">
+		<input type="button" value="list" onclick="select_table('list')">
+		<table id="nat" class="small">
+		</table>
+		<table id="theorems">
+		</table>
+	</body>
+</html>

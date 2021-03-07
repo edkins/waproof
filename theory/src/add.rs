@@ -18,6 +18,8 @@ pub mod test {
         succ_inj().chk("@x(@y(S(x) = S(y) -> x = y))");
         add_cancel_r().chk("@x(@y(@z(x + z = y + z -> x = y)))");
         add_cancel_l().chk("@x(@y(@z(x + y = x + z -> y = z)))");
+        eq_add_0_r().chk("@x(@y(x + y = 0 -> y = 0))");
+        neq_0_succ().chk("@x(!(0 = S(x)))");
     }
 }
 
@@ -142,7 +144,6 @@ pub fn succ_inj() -> Theorem {
     Theorem::as2()
 }
 
-
 pub fn add_cancel_r() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
@@ -195,7 +196,45 @@ pub fn add_cancel_l() -> Theorem {
             .equals("x + y", add_comm())?
             .equals("x + z", t0)?
             .equals("z + x", add_comm())?;
-        let t2 = add_cancel_r().import_subst(&boxes, &["y","z","x"])?;
+        let t2 = add_cancel_r().import_subst(&boxes, &["y", "z", "x"])?;
         t2.box_mp(t1, &boxes)
     })
+}
+
+pub fn eq_add_0_r() -> Theorem {
+    thread_local! {
+        static RESULT: Memo = Memo::default();
+    }
+    prove(&RESULT, |mut boxes| {
+        boxes.push_var("x")?;
+        boxes.push_var("y")?;
+        let _ih = boxes.push_and_get("x + y = 0 -> y = 0")?;
+
+        let hyp = boxes.push_and_get("x + S(y) = 0")?;
+        let t1 = boxes
+            .chain("0")?
+            .equals("x + S(y)", hyp)?
+            .equals("S(x + y)", add_succ_r())?;
+        let t2 = Theorem::as1().import_subst(&boxes, &["x + y"])?;
+        let t3 = t2.box_mp(t1, &boxes)?;
+        t3.box_chk("false", &boxes);
+        let ti = t3.contradiction("S(y) = 0", &boxes)?;
+        boxes.pop()?;
+
+        ti.box_chk("x + S(y) = 0 -> S(y) = 0", &boxes);
+        boxes.pop()?;
+        boxes.pop()?;
+
+        // Base case
+        let _hyp0 = boxes.push_and_get("x + 0 = 0")?;
+        let t0 = boxes.chain("0")?;
+        boxes.pop()?;
+        t0.box_chk("x + 0 = 0 -> 0 = 0", &boxes);
+
+        ti.induction(t0, &boxes)
+    })
+}
+
+pub fn neq_0_succ() -> Theorem {
+    Theorem::as1()
 }
