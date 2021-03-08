@@ -1,3 +1,4 @@
+use std::ops::{Add, Mul};
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -59,12 +60,7 @@ impl VarSet {
         if !self.contains(x) {
             self.clone()
         } else {
-            let vec = self
-                .0
-                .iter()
-                .filter(|y| y != &x)
-                .map(|y| y.clone())
-                .collect();
+            let vec = self.0.iter().filter(|y| y != &x).cloned().collect();
             VarSet(Rc::new(vec))
         }
     }
@@ -72,9 +68,7 @@ impl VarSet {
     pub fn union(&self, other: &Self) -> Self {
         if self.is_empty() {
             other.clone()
-        } else if other.is_empty() {
-            self.clone()
-        } else if self == other {
+        } else if other.is_empty() || self == other {
             self.clone()
         } else {
             let mut vec = (*self.0).clone();
@@ -190,28 +184,36 @@ impl Expr {
         }
     }
 
-    pub fn add(self, other: Self) -> Self {
-        let v = self.v.union(&other.v);
-        Expr {
-            e: ExprEnum::Add(Rc::new(self), Rc::new(other)),
-            v,
-        }
-    }
-
-    pub fn mul(self, other: Self) -> Self {
-        let v = self.v.union(&other.v);
-        Expr {
-            e: ExprEnum::Mul(Rc::new(self), Rc::new(other)),
-            v,
-        }
-    }
-
     pub fn eq(self, other: Self) -> Formula {
         let free = self.v.union(&other.v);
         Formula {
             f: FormulaEnum::Eq(Rc::new(self), Rc::new(other)),
             free,
             bound: VarSet::default(),
+        }
+    }
+}
+
+impl Add for Expr {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self::Output {
+        let v = self.v.union(&other.v);
+        Expr {
+            e: ExprEnum::Add(Rc::new(self), Rc::new(other)),
+            v,
+        }
+    }
+}
+
+impl Mul for Expr {
+    type Output = Self;
+
+    fn mul(self, other: Self) -> Self::Output {
+        let v = self.v.union(&other.v);
+        Expr {
+            e: ExprEnum::Mul(Rc::new(self), Rc::new(other)),
+            v,
         }
     }
 }

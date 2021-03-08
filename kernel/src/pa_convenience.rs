@@ -1,4 +1,5 @@
 use crate::pa_formula::{Expr, Formula, SyntaxError};
+use std::ops::Not;
 
 ////////////////
 //
@@ -6,11 +7,15 @@ use crate::pa_formula::{Expr, Formula, SyntaxError};
 //
 ////////////////
 
-impl Formula {
-    pub fn not(self) -> Formula {
+impl Not for Formula {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
         self.imp(Formula::falsehood()).unwrap()
     }
+}
 
+impl Formula {
     pub fn or(self, other: Self) -> Result<Formula, SyntaxError> {
         self.not().imp(other)
     }
@@ -43,9 +48,9 @@ pub fn num(n: usize) -> Expr {
         2 => Expr::z().s().s(),
         _ => {
             if (n & 1) == 1 {
-                num(n >> 1).mul(num(2)).s()
+                (num(n >> 1) * num(2)).s()
             } else {
-                num(n >> 1).mul(num(2))
+                num(n >> 1) * num(2)
             }
         }
     }

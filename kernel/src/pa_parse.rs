@@ -127,7 +127,7 @@ fn parse_muls(input: &str) -> IResult<&str, Expr, ParseError> {
     let (input, mb) = opt(preceded(parse_sym("*"), parse_muls))(input)?;
     let r = match mb {
         None => a,
-        Some(b) => a.mul(b),
+        Some(b) => a * b,
     };
     Ok((input, r))
 }
@@ -137,7 +137,7 @@ pub fn parse_expr(input: &str) -> IResult<&str, Expr, ParseError> {
     let (input, mb) = opt(preceded(parse_sym("+"), parse_expr))(input)?;
     let r = match mb {
         None => a,
-        Some(b) => a.add(b),
+        Some(b) => a + b,
     };
     Ok((input, r))
 }
@@ -169,7 +169,7 @@ fn parse_paren_formula(input: &str) -> IResult<&str, Formula, ParseError> {
 
 fn parse_not(input: &str) -> IResult<&str, Formula, ParseError> {
     let (input, f) = preceded(parse_sym("!"), parse_tight)(input)?;
-    Ok((input, f.not()))
+    Ok((input, !f))
 }
 
 fn parse_forall(input: &str) -> IResult<&str, Formula, ParseError> {
@@ -239,70 +239,64 @@ impl FromStr for Formula {
 }
 
 pub trait ToFormula {
-    fn to_formula(self) -> Result<Formula, ParseError>;
+    fn into_formula(self) -> Result<Formula, ParseError>;
 }
 
 impl ToFormula for Formula {
-    fn to_formula(self) -> Result<Formula, ParseError> {
+    fn into_formula(self) -> Result<Formula, ParseError> {
         Ok(self)
     }
 }
 
 impl ToFormula for &Formula {
-    fn to_formula(self) -> Result<Formula, ParseError> {
+    fn into_formula(self) -> Result<Formula, ParseError> {
         Ok(self.clone())
     }
 }
 
 impl ToFormula for &str {
-    fn to_formula(self) -> Result<Formula, ParseError> {
+    fn into_formula(self) -> Result<Formula, ParseError> {
         self.parse()
     }
 }
 
-impl ToFormula for Rc<Formula> {
-    fn to_formula(self) -> Result<Formula, ParseError> {
-        Ok((*self).clone())
-    }
-}
-
 impl ToFormula for &Rc<Formula> {
-    fn to_formula(self) -> Result<Formula, ParseError> {
+    fn into_formula(self) -> Result<Formula, ParseError> {
         Ok((**self).clone())
     }
 }
 
 pub trait ToExpr {
-    fn to_expr(self) -> Result<Expr, ParseError>;
+    fn into_expr(self) -> Result<Expr, ParseError>;
 }
 
 impl ToExpr for Expr {
-    fn to_expr(self) -> Result<Expr, ParseError> {
+    fn into_expr(self) -> Result<Expr, ParseError> {
         Ok(self)
     }
 }
 
 impl ToExpr for &Expr {
-    fn to_expr(self) -> Result<Expr, ParseError> {
+    fn into_expr(self) -> Result<Expr, ParseError> {
         Ok(self.clone())
     }
 }
 
 impl ToExpr for &str {
-    fn to_expr(self) -> Result<Expr, ParseError> {
+    fn into_expr(self) -> Result<Expr, ParseError> {
         self.parse()
     }
 }
 
 impl ToExpr for &Rc<Expr> {
-    fn to_expr(self) -> Result<Expr, ParseError> {
+    fn into_expr(self) -> Result<Expr, ParseError> {
         Ok((**self).clone())
     }
 }
 
 impl Theorem {
     pub fn checkr(&self, parseable: impl ToFormula + Clone + Debug) -> Result<(), ParseError> {
-        if parseable.clone().to_formula()? == *self.formula() {
+        if parseable.clone().into_formula()? == *self.formula() {
             Ok(())
         } else {
             Err(ParseError::Check(format!("{:?}", parseable)))

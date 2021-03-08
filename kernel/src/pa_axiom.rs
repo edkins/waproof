@@ -170,11 +170,7 @@ impl Theorem {
     pub fn aea1() -> Theorem {
         let f = Expr::var("x")
             .eq(Expr::var("y"))
-            .imp(
-                Expr::var("x")
-                    .add(Expr::var("z"))
-                    .eq(Expr::var("y").add(Expr::var("z"))),
-            )
+            .imp((Expr::var("x") + Expr::var("z")).eq(Expr::var("y") + Expr::var("z")))
             .unwrap()
             .forall("z")
             .unwrap()
@@ -188,11 +184,7 @@ impl Theorem {
     pub fn aea2() -> Theorem {
         let f = Expr::var("y")
             .eq(Expr::var("z"))
-            .imp(
-                Expr::var("x")
-                    .add(Expr::var("y"))
-                    .eq(Expr::var("x").add(Expr::var("z"))),
-            )
+            .imp((Expr::var("x") + Expr::var("y")).eq(Expr::var("x") + Expr::var("z")))
             .unwrap()
             .forall("z")
             .unwrap()
@@ -206,11 +198,7 @@ impl Theorem {
     pub fn aem1() -> Theorem {
         let f = Expr::var("x")
             .eq(Expr::var("y"))
-            .imp(
-                Expr::var("x")
-                    .mul(Expr::var("z"))
-                    .eq(Expr::var("y").mul(Expr::var("z"))),
-            )
+            .imp((Expr::var("x") * Expr::var("z")).eq(Expr::var("y") * Expr::var("z")))
             .unwrap()
             .forall("z")
             .unwrap()
@@ -224,11 +212,7 @@ impl Theorem {
     pub fn aem2() -> Theorem {
         let f = Expr::var("y")
             .eq(Expr::var("z"))
-            .imp(
-                Expr::var("x")
-                    .mul(Expr::var("y"))
-                    .eq(Expr::var("x").mul(Expr::var("z"))),
-            )
+            .imp((Expr::var("x") * Expr::var("y")).eq(Expr::var("x") * Expr::var("z")))
             .unwrap()
             .forall("z")
             .unwrap()
@@ -263,8 +247,7 @@ impl Theorem {
     }
 
     pub fn aa1() -> Theorem {
-        let f = Expr::var("x")
-            .add(Expr::z())
+        let f = (Expr::var("x") + Expr::z())
             .eq(Expr::var("x"))
             .forall("x")
             .unwrap();
@@ -272,9 +255,8 @@ impl Theorem {
     }
 
     pub fn aa2() -> Theorem {
-        let f = Expr::var("x")
-            .add(Expr::var("y").s())
-            .eq(Expr::var("x").add(Expr::var("y")).s())
+        let f = (Expr::var("x") + Expr::var("y").s())
+            .eq((Expr::var("x") + Expr::var("y")).s())
             .forall("y")
             .unwrap()
             .forall("x")
@@ -283,8 +265,7 @@ impl Theorem {
     }
 
     pub fn am1() -> Theorem {
-        let f = Expr::var("x")
-            .mul(Expr::z())
+        let f = (Expr::var("x") * Expr::z())
             .eq(Expr::z())
             .forall("x")
             .unwrap();
@@ -292,9 +273,8 @@ impl Theorem {
     }
 
     pub fn am2() -> Theorem {
-        let f = Expr::var("x")
-            .mul(Expr::var("y").s())
-            .eq(Expr::var("x").mul(Expr::var("y")).add(Expr::var("x")))
+        let f = (Expr::var("x") * Expr::var("y").s())
+            .eq(Expr::var("x") * Expr::var("y") + Expr::var("x"))
             .forall("y")
             .unwrap()
             .forall("x")
@@ -306,9 +286,9 @@ impl Theorem {
         if a.has_bound(x) {
             return Err(TheoremError::BoundTwice(x.to_owned()));
         }
-        let a0 = a.clone().subst(x, &Expr::z())?;
+        let a0 = a.subst(x, &Expr::z())?;
         let ax = a.clone();
-        let asx = a.clone().subst(x, &Expr::var(x).s())?;
+        let asx = a.subst(x, &Expr::var(x).s())?;
         let f = a0
             .imp(ax.imp(asx)?.forall(x)?.imp(a.forall(x)?)?)?
             .generalize(gen)?;

@@ -63,7 +63,7 @@ impl Equalizer for Exact {
         let ab = boxing::peel_box_exact(self.0.formula(), boxes)?;
         let (a, b) = expect_eq(&ab)?;
         if left == a && right == b {
-            return Ok(self.0.clone());
+            Ok(self.0.clone())
         } else {
             Err(TheoryError::StructuralMismatch)
         }
@@ -146,7 +146,7 @@ pub fn expect_s(e: &Expr) -> Result<&Expr, TheoryError> {
     e.cases(
         |_| Err(TheoryError::StructuralMismatch),
         || Err(TheoryError::StructuralMismatch),
-        |y| Ok(y),
+        Ok,
         |_, _| Err(TheoryError::StructuralMismatch),
         |_, _| Err(TheoryError::StructuralMismatch),
     )
@@ -180,7 +180,7 @@ pub enum ExprRef<'a> {
     Mul(&'a Expr, &'a Expr),
 }
 
-pub fn as_enum<'a>(e: &'a Expr) -> ExprRef<'a> {
+pub fn as_enum(e: &Expr) -> ExprRef<'_> {
     e.cases(
         |x| ExprRef::Var(x),
         || ExprRef::Z,
@@ -236,7 +236,7 @@ fn substitution_map_to_list(map: &HashMap<String, Expr>, boxes: &[Boxing]) -> Ve
         .iter()
         .map(|b| {
             if let Boxing::Var(x) = b {
-                map.get(x).cloned().unwrap_or(Expr::z())
+                map.get(x).cloned().unwrap_or_else(Expr::z)
             } else {
                 panic!("Box is not a var");
             }

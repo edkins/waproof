@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::ops::Deref;
 
@@ -178,7 +179,7 @@ pub enum FormulaRef<'a> {
     ForAll(&'a str, &'a Formula),
 }
 
-pub fn f_as_enum<'a>(f: &'a Formula) -> FormulaRef<'a> {
+pub fn f_as_enum(f: &Formula) -> FormulaRef<'_> {
     f.cases(
         || FormulaRef::False,
         FormulaRef::Eq,
@@ -240,7 +241,7 @@ fn install_hyps(
 impl TheoremBox for Theorem {
     fn box_a1(a: impl ToFormula, b: impl ToFormula, boxes: &[Boxing]) -> Result<Self, TheoryError> {
         let xs = just_vars(boxes);
-        let t = Theorem::a1(a.to_formula()?, b.to_formula()?, &xs)?;
+        let t = Theorem::a1(a.into_formula()?, b.into_formula()?, &xs)?;
         install_hyps(t, boxes, &xs)
     }
 
@@ -251,13 +252,13 @@ impl TheoremBox for Theorem {
         boxes: &[Boxing],
     ) -> Result<Self, TheoryError> {
         let xs = just_vars(boxes);
-        let t = Theorem::a2(a.to_formula()?, b.to_formula()?, c.to_formula()?, &xs)?;
+        let t = Theorem::a2(a.into_formula()?, b.into_formula()?, c.into_formula()?, &xs)?;
         install_hyps(t, boxes, &xs)
     }
 
     fn box_a3(a: impl ToFormula, boxes: &[Boxing]) -> Result<Self, TheoryError> {
         let xs = just_vars(boxes);
-        let t = Theorem::a3(a.to_formula()?, &xs)?;
+        let t = Theorem::a3(a.into_formula()?, &xs)?;
         install_hyps(t, boxes, &xs)
     }
 
@@ -268,13 +269,13 @@ impl TheoremBox for Theorem {
         boxes: &[Boxing],
     ) -> Result<Self, TheoryError> {
         let xs = just_vars(boxes);
-        let t = Theorem::a4(a.to_formula()?, b.to_formula()?, x, &xs)?;
+        let t = Theorem::a4(a.into_formula()?, b.into_formula()?, x, &xs)?;
         install_hyps(t, boxes, &xs)
     }
 
     fn box_a5(a: impl ToFormula, x: &str, boxes: &[Boxing]) -> Result<Self, TheoryError> {
         let xs = just_vars(boxes);
-        let t = Theorem::a5(a.to_formula()?, x, &xs)?;
+        let t = Theorem::a5(a.into_formula()?, x, &xs)?;
         install_hyps(t, boxes, &xs)
     }
 
@@ -285,7 +286,7 @@ impl TheoremBox for Theorem {
         boxes: &[Boxing],
     ) -> Result<Self, TheoryError> {
         let xs = just_vars(boxes);
-        let t = Theorem::a6(a.to_formula()?, x, e.to_expr()?, &xs)?;
+        let t = Theorem::a6(a.into_formula()?, x, e.into_expr()?, &xs)?;
         install_hyps(t, boxes, &xs)
     }
 
@@ -349,24 +350,24 @@ impl TheoremBox for Theorem {
     }
 
     fn import(self, depth: usize, boxes: &[Boxing]) -> Result<Self, TheoryError> {
-        if depth == boxes.len() {
-            Ok(self)
-        } else if depth > boxes.len() {
-            Err(TheoryError::ImportDepthTooGreat)
-        } else {
-            let f = peel_box_exact(self.formula(), &boxes[0..depth])?;
-            match &boxes[depth] {
-                Boxing::Var(x) => {
-                    // self: ...f
-                    let t0 = Theorem::box_a5(f, x, &boxes[0..depth])?; // ...(f -> @x(f))
-                    let t1 = t0.box_mp(self, &boxes[0..depth])?; // ...@x(f)
-                    t1.import(depth + 1, boxes)
-                }
-                Boxing::Hyp(h) => {
-                    // self: ...f
-                    let t0 = Theorem::box_a1(f.clone(), h.clone(), &boxes[0..depth])?; // ...(f -> (h -> f))
-                    let t1 = t0.box_mp(self, &boxes[0..depth])?; // ...(h -> f)
-                    t1.import(depth + 1, boxes)
+        match depth.cmp(&boxes.len()) {
+            Ordering::Equal => Ok(self),
+            Ordering::Greater => Err(TheoryError::ImportDepthTooGreat),
+            Ordering::Less => {
+                let f = peel_box_exact(self.formula(), &boxes[0..depth])?;
+                match &boxes[depth] {
+                    Boxing::Var(x) => {
+                        // self: ...f
+                        let t0 = Theorem::box_a5(f, x, &boxes[0..depth])?; // ...(f -> @x(f))
+                        let t1 = t0.box_mp(self, &boxes[0..depth])?; // ...@x(f)
+                        t1.import(depth + 1, boxes)
+                    }
+                    Boxing::Hyp(h) => {
+                        // self: ...f
+                        let t0 = Theorem::box_a1(f, h.clone(), &boxes[0..depth])?; // ...(f -> (h -> f))
+                        let t1 = t0.box_mp(self, &boxes[0..depth])?; // ...(h -> f)
+                        t1.import(depth + 1, boxes)
+                    }
                 }
             }
         }
@@ -380,19 +381,19 @@ impl TheoremBox for Theorem {
         let xs = just_vars(boxes);
         let mut es = vec![];
         for expr in exprs {
-            es.push(expr.clone().to_expr()?);
+            es.push(expr.clone().into_expr()?);
         }
         let t = self.subst_gen(&es, &xs)?;
         install_hyps(t, boxes, &xs)
     }
 
     fn imp_self(f: impl ToFormula, boxes: &[Boxing]) -> Result<Self, TheoryError> {
-        let a = f.to_formula()?;
+        let a = f.into_formula()?;
         let xs = just_vars(boxes);
         let t1 = Theorem::a1(a.clone(), a.clone().imp(a.clone())?, &xs)?; // @... (x -> (x -> x) -> x)
         let t2 = Theorem::a2(a.clone(), a.clone().imp(a.clone())?, a.clone(), &xs)?; // @... ((x -> (x -> x) -> x) -> (x -> (x -> x)) -> (x -> x) )
         let t3 = t2.gen_mp(t1, xs.len())?; // @... ((x -> (x -> x)) -> (x -> x))
-        let t4 = Theorem::a1(a.clone(), a.clone(), &xs)?; // x -> (x -> x)
+        let t4 = Theorem::a1(a.clone(), a, &xs)?; // x -> (x -> x)
         let t5 = t3.gen_mp(t4, xs.len())?; // @... (x -> x)
         install_hyps(t5, boxes, &xs)
     }
@@ -402,11 +403,11 @@ impl TheoremBox for Theorem {
         let (x, f) = gen::peel_forall(&xf)?;
         let vars = just_vars(&boxes);
 
-        let e = expr.to_expr()?;
+        let e = expr.into_expr()?;
         gen::check_expr_environment(&e, &vars)?;
 
         if vars.iter().any(|y| *y == *x) {
-            return Err(TheoryError::SubstOuterConflict(x.to_owned()));
+            return Err(TheoryError::SubstOuterConflict(x));
         }
 
         // self: ...@x(f[x])
@@ -464,7 +465,7 @@ impl TheoremBox for Theorem {
                 let mut boxes_y2 = boxes.to_vec();
                 boxes_y2.push(Boxing::Var(y2.clone()));
                 let t0 = self.import(boxes.len(), &boxes_y2)?; // ...@y2(@x(@y(f[y])))
-                let mut boxes_y2_x = boxes_y2.clone();
+                let mut boxes_y2_x = boxes_y2;
                 boxes_y2_x.push(Boxing::Var(x.clone()));
                 let t1 = Theorem::box_a6(f.clone(), y, Expr::var(&y2), &boxes_y2_x)?; // ...@y2(@x(@y(f[y]) -> f[y2]))
                 let t2 = t1.box_mp(t0, &boxes_y2_x)?; // ...@y2(@x(f[y2]))
@@ -510,11 +511,11 @@ impl TheoremBox for Theorem {
 
     fn contradiction(self, target: impl ToFormula, boxes: &[Boxing]) -> Result<Self, TheoryError> {
         // self: ...false
-        let a = target.to_formula()?;
+        let a = target.into_formula()?;
         gen::expect_false(&peel_box_exact(self.formula(), boxes)?)?;
         let t0 = Theorem::box_a3(a.clone(), boxes)?; // ...(!a -> false) -> a
         let mut boxes2 = boxes.to_vec();
-        boxes2.push(Boxing::Hyp(a.not()));
+        boxes2.push(Boxing::Hyp(!a));
         let t1 = self.import(boxes.len(), &boxes2)?; // ...(!a -> false)
         t0.box_mp(t1, boxes)
     }
@@ -523,12 +524,12 @@ impl TheoremBox for Theorem {
         let f = boxed_formula(boxes, parseable.clone()).unwrap();
         self.clone()
             .check(f)
-            .expect(&format!("{:?} in boxes {:?}", parseable, boxes));
+            .unwrap_or_else(|_| panic!("{:?} in boxes {:?}", parseable, boxes));
     }
 }
 
 pub fn boxed_formula(boxes: &[Boxing], f: impl ToFormula) -> Result<Formula, TheoryError> {
-    let mut formula = f.to_formula()?;
+    let mut formula = f.into_formula()?;
     for b in boxes.iter().rev() {
         match b {
             Boxing::Var(x) => {
@@ -635,7 +636,7 @@ impl Boxes {
     /// boxes.push_hyp("@x(x = x)").expect_err("fails because x is bound twice");
     /// ```
     pub fn push_hyp(&mut self, hyp: impl ToFormula) -> Result<(), TheoryError> {
-        let f = hyp.to_formula()?;
+        let f = hyp.into_formula()?;
         let bounds = self.bound();
         for x in f.bound().slice() {
             if bounds.contains(x) {
@@ -661,7 +662,7 @@ impl Boxes {
     /// t.chk("0 = 1 -> 0 = 1");
     /// ```
     pub fn push_and_get(&mut self, hyp: impl ToFormula) -> Result<Theorem, TheoryError> {
-        let f = hyp.to_formula()?;
+        let f = hyp.into_formula()?;
         let result = Theorem::imp_self(f.clone(), self)?;
         self.push_hyp(f)?;
         Ok(result)

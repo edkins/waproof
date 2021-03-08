@@ -13,10 +13,10 @@ impl Expr {
                     Expr::var(y)
                 }
             },
-            || Expr::z(),
+            Expr::z,
             |a| a.subst(x, value).s(),
-            |a, b| a.subst(x, value).add(b.subst(x, value)),
-            |a, b| a.subst(x, value).mul(b.subst(x, value)),
+            |a, b| a.subst(x, value) + b.subst(x, value),
+            |a, b| a.subst(x, value) * b.subst(x, value),
         )
     }
 }

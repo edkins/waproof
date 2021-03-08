@@ -29,7 +29,7 @@ pub fn expect_imp(a: &Formula) -> Result<(&Formula, &Formula), TheoryError> {
     )
 }
 
-pub fn expect_forall<'a>(a: &'a Formula) -> Result<(&'a str, &'a Formula), TheoryError> {
+pub fn expect_forall(a: &Formula) -> Result<(&'_ str, &'_ Formula), TheoryError> {
     a.cases(
         || Err(TheoryError::NotForAll),
         |_, _| Err(TheoryError::NotForAll),
@@ -214,8 +214,8 @@ impl TheoremGen for Theorem {
             if x != y {
                 return Err(TheoryError::VarMismatch(x, y));
             }
-            let (h, b) = expect_imp(&ab)?;
-            if *h != a {
+            let (hyp, b) = expect_imp(&ab)?;
+            if *hyp != a {
                 return Err(TheoryError::WrongHyp);
             }
             // self: @xs...@x(a->b)
@@ -422,7 +422,7 @@ mod test {
     fn subst_gen_x_yz() {
         let t = Theorem::aa1().check("@x(x + 0 = x)").unwrap();
         let t1 = t
-            .subst_gen(&[Expr::var("y").add(Expr::var("z"))], &v(&["z", "y"]))
+            .subst_gen(&[Expr::var("y") + Expr::var("z")], &v(&["z", "y"]))
             .unwrap();
         t1.check("@z(@y((y+z) + 0 = (y+z)))").unwrap();
     }
@@ -469,7 +469,7 @@ mod test {
             .unwrap();
         let t2 = t1
             .subst_gen(
-                &[Expr::var("x").add(num(0)), Expr::var("x"), num(0)],
+                &[Expr::var("x") + num(0), Expr::var("x"), num(0)],
                 &v(&["x"]),
             )
             .unwrap();
@@ -491,7 +491,7 @@ mod test {
             .check("@x(@y(@z(x = y -> x + z = y + z)))")
             .unwrap();
         let t2 = t1
-            .subst_gen(&[Expr::var("x").add(num(0)), Expr::var("x")], &v(&["x"]))
+            .subst_gen(&[Expr::var("x") + num(0), Expr::var("x")], &v(&["x"]))
             .unwrap()
             .check("@x(@z(x + 0 = x -> (x + 0) + z = x + z))")
             .unwrap();
