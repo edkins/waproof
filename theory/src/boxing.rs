@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::ops::Deref;
 
+use crate::equalizer;
 use crate::gen::{self, peel_foralls, TheoremGen};
 use crate::util::TheoryError;
 use kernel::pa_axiom::Theorem;
@@ -92,6 +93,8 @@ pub trait TheoremBox: Sized {
         boxes: &[Boxing],
         exprs: &[impl ToExpr + Clone],
     ) -> Result<Self, TheoryError>;
+
+    fn import_as(self, boxes: &[Boxing], target: impl ToFormula) -> Result<Self, TheoryError>;
 
     /// Prove that a formula implies itself, within some boxes.
     ///
@@ -385,6 +388,20 @@ impl TheoremBox for Theorem {
         }
         let t = self.subst_gen(&es, &xs)?;
         install_hyps(t, boxes, &xs)
+    }
+
+    fn import_as(self, boxes: &[Boxing], target: impl ToFormula) -> Result<Self, TheoryError> {
+        let (xs, source) = gen::peel_all_outer_foralls(self.formula());
+        let source_boxes = xs
+            .iter()
+            .map(|x| Boxing::Var(x.to_owned()))
+            .collect::<Vec<_>>();
+        let exprs = equalizer::formula_substitutions_to_list(
+            &source,
+            &target.into_formula()?,
+            &source_boxes,
+        )?;
+        self.import_subst(boxes, &exprs)
     }
 
     fn imp_self(f: impl ToFormula, boxes: &[Boxing]) -> Result<Self, TheoryError> {

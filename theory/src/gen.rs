@@ -43,6 +43,19 @@ pub fn peel_forall(a: &Formula) -> Result<(String, Formula), TheoryError> {
     Ok((x.to_owned(), (*f).clone()))
 }
 
+pub fn peel_all_outer_foralls(a: &Formula) -> (Vec<String>, Formula) {
+    let mut vars = vec![];
+    let mut f = a.clone();
+    loop {
+        if let Ok((x, f2)) = expect_forall(&f) {
+            vars.push(x.to_owned());
+            f = (*f2).clone();
+        } else {
+            return (vars, f);
+        }
+    }
+}
+
 pub fn peel_foralls(a: &Formula, count: usize) -> Result<(Vec<String>, Formula), TheoryError> {
     let mut vars = vec![];
     let mut f = a.clone();

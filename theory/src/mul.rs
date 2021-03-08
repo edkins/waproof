@@ -222,11 +222,10 @@ fn mult_is_1_r_succ() -> Theorem {
             .equals("x * S(y) + S(y)", add_succ_r())?
             .equals("S(x) * S(y)", mul_succ_l())?
             .equals("S(0)", hyp)?;
-        let t2 = succ_inj().import_subst(&boxes, &["x * S(y) + y", "0"])?;
-        t2.box_chk("S(x * S(y) + y) = S(0) -> x * S(y) + y = 0", &boxes);
+        let t2 = succ_inj().import_as(&boxes, "S(x * S(y) + y) = S(0) -> x * S(y) + y = 0")?;
         let t3 = t2.box_mp(t1, &boxes)?;
         t3.box_chk("x * S(y) + y = 0", &boxes);
-        let t4 = eq_add_0_r().import_subst(&boxes, &["x * S(y)", "y"])?;
+        let t4 = eq_add_0_r().import_as(&boxes, "x * S(y) + y = 0 -> y = 0")?;
         let t5 = t4.box_mp(t3, &boxes)?;
         t5.box_chk("y = 0", &boxes);
         let ti = boxes.chain("S(y)")?.equals("S(0)", t5)?;
@@ -252,7 +251,7 @@ pub fn mult_is_1_r() -> Theorem {
         boxes.push_var("y")?;
         boxes.push_var("x")?;
         let _ih = boxes.push_and_get("x * y = 1 -> y = 1")?;
-        let ti = mult_is_1_r_succ().import_subst(&boxes, &["x", "y"])?;
+        let ti = mult_is_1_r_succ().import_as(&boxes, "S(x) * y = 1 -> y = 1")?;
         boxes.pop()?;
         boxes.pop()?;
 
@@ -262,7 +261,7 @@ pub fn mult_is_1_r() -> Theorem {
             .equals("0 * y", mul_0_l())?
             .equals("S(0)", hyp)?;
         let t0 = neq_0_succ()
-            .import_subst(&boxes, &["0"])?
+            .import_as(&boxes, "!(0 = S(0))")?
             .box_mp(t1, &boxes)?
             .contradiction("y = 1", &boxes)?;
         boxes.pop()?;

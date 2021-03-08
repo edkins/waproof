@@ -151,7 +151,7 @@ pub fn add_cancel_r() -> Theorem {
             .equals("x + S(z)", add_succ_r())?
             .equals("y + S(z)", t1)?
             .equals("S(y + z)", add_succ_r())?;
-        let t3 = succ_inj().import_subst(&boxes, &["x + z", "y + z"])?;
+        let t3 = succ_inj().import_as(&boxes, "S(x + z) = S(y + z) -> x + z = y + z")?;
         let t4 = t3.box_mp(t2, &boxes)?;
         t4.box_chk("x + z = y + z", &boxes);
         let ti = ih.import(4, &boxes)?.box_mp(t4, &boxes)?;
@@ -186,9 +186,13 @@ pub fn add_cancel_l() -> Theorem {
             .equals("x + y", add_comm())?
             .equals("x + z", t0)?
             .equals("z + x", add_comm())?;
-        let t2 = add_cancel_r().import_subst(&boxes, &["y", "z", "x"])?;
+        let t2 = add_cancel_r().import_as(&boxes, "y + x = z + x -> y = z")?;
         t2.box_mp(t1, &boxes)
     })
+}
+
+pub fn neq_0_succ() -> Theorem {
+    Theorem::as1()
 }
 
 pub fn eq_add_0_r() -> Theorem {
@@ -205,7 +209,7 @@ pub fn eq_add_0_r() -> Theorem {
             .chain("0")?
             .equals("x + S(y)", hyp)?
             .equals("S(x + y)", add_succ_r())?;
-        let t2 = Theorem::as1().import_subst(&boxes, &["x + y"])?;
+        let t2 = neq_0_succ().import_as(&boxes, "!(0 = S(x + y))")?;
         let t3 = t2.box_mp(t1, &boxes)?;
         t3.box_chk("false", &boxes);
         let ti = t3.contradiction("S(y) = 0", &boxes)?;
@@ -223,8 +227,4 @@ pub fn eq_add_0_r() -> Theorem {
 
         ti.induction(t0, &boxes)
     })
-}
-
-pub fn neq_0_succ() -> Theorem {
-    Theorem::as1()
 }

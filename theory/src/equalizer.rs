@@ -1,4 +1,4 @@
-use crate::boxing::{self, Boxes, Boxing, TheoremBox};
+use crate::boxing::{self, Boxes, Boxing, FormulaRef, TheoremBox};
 use crate::util::TheoryError;
 use kernel::pa_axiom::Theorem;
 use kernel::pa_formula::{Expr, Formula};
@@ -224,6 +224,47 @@ fn figure_out_substitutions(
             figure_out_substitutions(map, b, d)
         }
     }
+}
+
+fn figure_out_formula_substitutions(
+    map: &mut HashMap<String, Expr>,
+    before: &Formula,
+    after: &Formula,
+) -> Result<(), TheoryError> {
+    match (boxing::f_as_enum(before), boxing::f_as_enum(after)) {
+        (FormulaRef::False, FormulaRef::False) => Ok(()),
+        (FormulaRef::Eq(a, b), FormulaRef::Eq(c, d)) => {
+            figure_out_substitutions(map, a, c)?;
+            figure_out_substitutions(map, b, d)
+        }
+        (FormulaRef::Imp(a, b), FormulaRef::Imp(c, d)) => {
+            figure_out_formula_substitutions(map, a, c)?;
+            figure_out_formula_substitutions(map, b, d)
+        }
+        (FormulaRef::ForAll(x, a), FormulaRef::ForAll(y, b)) => {
+            if x != y {
+                Err(TheoryError::StructuralMismatch)
+            } else {
+                figure_out_formula_substitutions(map, a, b)
+            }
+        }
+        _ => Err(TheoryError::StructuralMismatch),
+    }
+}
+
+pub fn formula_substitutions_to_list(
+    before: &Formula,
+    after: &Formula,
+    boxes: &[Boxing],
+) -> Result<Vec<Expr>, TheoryError> {
+    let mut map = HashMap::new();
+    for x in before.bound().slice() {
+        map.insert(x.to_owned(), Expr::var(x));
+    }
+
+    figure_out_formula_substitutions(&mut map, before, after)?;
+
+    Ok(substitution_map_to_list(&map, boxes))
 }
 
 /// An equalizer which imports a particular theorem into the box context and
