@@ -1,6 +1,4 @@
-use crate::boxing::TheoremBox;
-use crate::eq::TheoremEq;
-use crate::util::{prove, prove_with_script, Memo};
+use crate::util::{prove_with_script, Memo};
 use kernel::pa_axiom::Theorem;
 
 #[cfg(test)]
@@ -138,57 +136,61 @@ pub fn add_cancel_r() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
-        boxes.push_var("x")?;
-        boxes.push_var("y")?;
-        boxes.push_var("z")?;
-        let ih = boxes.push_and_get("x + z = y + z -> x = y")?;
-
-        // Inductive step
-        let t1 = boxes.push_and_get("x + S(z) = y + S(z)")?;
-        let t2 = boxes
-            .chain("S(x + z)")?
-            .equals("x + S(z)", add_succ_r())?
-            .equals("y + S(z)", t1)?
-            .equals("S(y + z)", add_succ_r())?;
-        let t3 = succ_inj().import_as(&boxes, "S(x + z) = S(y + z) -> x + z = y + z")?;
-        let t4 = t3.box_mp(t2, &boxes)?;
-        t4.box_chk("x + z = y + z", &boxes);
-        let ti = ih.import(4, &boxes)?.box_mp(t4, &boxes)?;
-        boxes.pop()?;
-        boxes.pop()?;
-        boxes.pop()?;
-
-        // Base case
-        let t5 = boxes.push_and_get("x + 0 = y + 0")?;
-        let t0 = boxes
-            .chain("x")?
-            .equals("x + 0", add_0_r())?
-            .equals("y + 0", t5)?
-            .equals("y", add_0_r())?;
-        boxes.pop()?;
-
-        ti.induction(t0, &boxes)
-    })
+    prove_with_script(
+        &RESULT,
+        "
+var x {
+    var y {
+        var z {
+            hyp x + z = y + z -> x = y
+            {
+                hyp x + S(z) = y + S(z)
+                {
+                    chain S(x + z)
+                        = x + S(z)
+                        = y + S(z)
+                        = S(y + z);
+                    import S(x + z) = S(y + z) -> x + z = y + z;
+                    mp x + z = y + z;
+                    mp x = y;
+                }
+            }
+        }
+        hyp x + 0 = y + 0
+        {
+            chain x = x + 0 = y + 0 = y;
+        }
+        induction;
+    }
+}",
+        &[succ_inj(), add_succ_r(), add_0_r()],
+    )
 }
 
 pub fn add_cancel_l() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
-        boxes.push_var("x")?;
-        boxes.push_var("y")?;
-        boxes.push_var("z")?;
-        let t0 = boxes.push_and_get("x + y = x + z")?;
-        let t1 = boxes
-            .chain("y + x")?
-            .equals("x + y", add_comm())?
-            .equals("x + z", t0)?
-            .equals("z + x", add_comm())?;
-        let t2 = add_cancel_r().import_as(&boxes, "y + x = z + x -> y = z")?;
-        t2.box_mp(t1, &boxes)
-    })
+    prove_with_script(
+        &RESULT,
+        "
+var x {
+    var y {
+        var z {
+            hyp x + y = x + z
+            {
+                chain y + x
+                    = x + y
+                    = x + z
+                    = z + x;
+                import y + x = z + x -> y = z;
+                mp y = z;
+            }
+        }
+    }
+}",
+        &[add_comm(), add_cancel_r()],
+    )
 }
 
 pub fn neq_0_succ() -> Theorem {
@@ -199,7 +201,33 @@ pub fn eq_add_0_r() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
+    prove_with_script(
+        &RESULT,
+        "
+var x {
+    var y {
+        hyp x + y = 0 -> y = 0
+        {
+            hyp x + S(y) = 0
+            {
+                chain 0
+                    = x + S(y)
+                    = S(x + y);
+                import !(0 = S(x + y));
+                mp false;
+                exfalso S(y) = 0;
+            }
+        }
+    }
+    hyp x + 0 = 0
+    {
+        chain 0;
+    }
+    induction;
+}",
+        &[add_succ_r(), neq_0_succ()],
+    )
+    /*prove(&RESULT, |mut boxes| {
         boxes.push_var("x")?;
         boxes.push_var("y")?;
         let _ih = boxes.push_and_get("x + y = 0 -> y = 0")?;
@@ -226,5 +254,5 @@ pub fn eq_add_0_r() -> Theorem {
         t0.box_chk("x + 0 = 0 -> 0 = 0", &boxes);
 
         ti.induction(t0, &boxes)
-    })
+    })*/
 }

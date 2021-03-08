@@ -18,6 +18,8 @@ pub enum ScriptEl {
     Pop,
     Chain(Vec<Expr>),
     Import(Formula),
+    ModusPonens(Formula),
+    ExFalso(Formula),
     Induction,
 }
 
@@ -56,6 +58,20 @@ fn parse_import(input: &str) -> IResult<&str, ScriptEl, ParseError> {
     Ok((input, ScriptEl::Import(f)))
 }
 
+fn parse_mp(input: &str) -> IResult<&str, ScriptEl, ParseError> {
+    let (input, _) = parse_keyword("mp")(input)?;
+    let (input, f) = parse_formula(input)?;
+    let (input, _) = parse_sym(";")(input)?;
+    Ok((input, ScriptEl::ModusPonens(f)))
+}
+
+fn parse_exfalso(input: &str) -> IResult<&str, ScriptEl, ParseError> {
+    let (input, _) = parse_keyword("exfalso")(input)?;
+    let (input, f) = parse_formula(input)?;
+    let (input, _) = parse_sym(";")(input)?;
+    Ok((input, ScriptEl::ExFalso(f)))
+}
+
 fn parse_induction(input: &str) -> IResult<&str, ScriptEl, ParseError> {
     value(
         ScriptEl::Induction,
@@ -70,6 +86,8 @@ fn parse_el(input: &str) -> IResult<&str, ScriptEl, ParseError> {
         parse_pop,
         parse_chain,
         parse_import,
+        parse_mp,
+        parse_exfalso,
         parse_induction,
     ))(input)
 }

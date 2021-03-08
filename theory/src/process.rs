@@ -1,4 +1,4 @@
-use crate::boxing::{Boxes, TheoremBox};
+use crate::boxing::{self, Boxes, TheoremBox};
 use crate::eq::TheoremEq;
 use crate::equalizer::MultiTheoremEqualizer;
 use crate::script::{Script, ScriptEl};
@@ -12,20 +12,33 @@ pub fn prove_script(script: &str, references: &[Theorem]) -> Result<Theorem, The
 
 struct TheoremSet {
     theorems: Vec<Theorem>,
-    stacks: Vec<Boxes>,
+    depths: Vec<usize>,
+    depth: usize,
 }
 
 impl TheoremSet {
     fn from_references(references: &[Theorem]) -> Self {
         TheoremSet {
             theorems: references.to_vec(),
-            stacks: vec![Boxes::default(); references.len()],
+            depths: vec![0; references.len()],
+            depth: 0,
         }
     }
 
-    fn add(&mut self, theorem: &Theorem, stack: &Boxes) {
+    fn add(&mut self, theorem: &Theorem) {
         self.theorems.push(theorem.clone());
-        self.stacks.push(stack.clone());
+        self.depths.push(self.depth);
+    }
+
+    fn incr_depth(&mut self) {
+        self.depth += 1;
+    }
+
+    fn decr_depth(&mut self) {
+        self.depth -= 1;
+        for i in 0..self.depths.len() {
+            self.depths[i] = self.depths[i].min(self.depth);
+        }
     }
 
     fn equalizer(&self) -> MultiTheoremEqualizer {
@@ -49,11 +62,18 @@ impl Script {
         let mut current = None;
         for el in &self.0 {
             match el {
-                ScriptEl::Pop => boxes.pop()?,
-                ScriptEl::PushVar(x) => boxes.push_var(&x)?,
+                ScriptEl::Pop => {
+                    boxes.pop()?;
+                    refs.decr_depth();
+                }
+                ScriptEl::PushVar(x) => {
+                    boxes.push_var(&x)?;
+                    refs.incr_depth();
+                }
                 ScriptEl::PushHyp(h) => {
                     let theorem = boxes.push_and_get(h)?;
-                    refs.add(&theorem, &boxes);
+                    refs.incr_depth();
+                    refs.add(&theorem);
                     current = Some(theorem);
                 }
                 ScriptEl::Chain(ch) => {
@@ -62,18 +82,64 @@ impl Script {
                     for rhs in &ch[1..] {
                         theorem = theorem.equals(rhs, equalizer.clone())?;
                     }
-                    refs.add(&theorem, &boxes);
+                    refs.add(&theorem);
                     current = Some(theorem);
                 }
-                ScriptEl::Import(_) => {
-                    panic!("Not yet handled: import");
+                ScriptEl::Import(formula) => {
+                    let mut found = false;
+                    for candidate in &refs.theorems {
+                        if let Ok(t) = candidate.clone().import_as(&boxes, formula) {
+                            refs.add(&t);
+                            current = Some(t);
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !found {
+                        return Err(TheoryError::NoSuitableTheoremFound);
+                    }
+                }
+                ScriptEl::ModusPonens(formula) => {
+                    let current_theorem = current.clone().ok_or(TheoryError::NoTheorem)?;
+                    let mut found = false;
+                    for i in 0..refs.theorems.len() {
+                        let candidate = &refs.theorems[i];
+                        let depth = refs.depths[i];
+                        if let Ok(imported) = candidate.clone().import(depth, &boxes) {
+                            if let Ok(t) = current_theorem.clone().box_mp(imported.clone(), &boxes)
+                            {
+                                if boxing::peel_box_exact(t.formula(), &boxes)? == *formula {
+                                    refs.add(&t);
+                                    current = Some(t);
+                                    found = true;
+                                    break;
+                                }
+                            } else if let Ok(t) = imported.box_mp(current_theorem.clone(), &boxes) {
+                                if boxing::peel_box_exact(t.formula(), &boxes)? == *formula {
+                                    refs.add(&t);
+                                    current = Some(t);
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if !found {
+                        return Err(TheoryError::NoSuitableTheoremFound);
+                    }
+                }
+                ScriptEl::ExFalso(formula) => {
+                    let current_theorem = current.clone().ok_or(TheoryError::NoTheorem)?;
+                    let t = current_theorem.contradiction(formula, &boxes)?;
+                    refs.add(&t);
+                    current = Some(t);
                 }
                 ScriptEl::Induction => {
                     let t0 = current.clone().ok_or(TheoryError::NoTheorem)?;
                     let mut found = false;
                     for ti in &refs.theorems {
                         if let Ok(t) = ti.clone().induction(t0.clone(), &boxes) {
-                            refs.add(&t, &boxes);
+                            refs.add(&t);
                             current = Some(t);
                             found = true;
                             break;
