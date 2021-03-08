@@ -1,9 +1,7 @@
 use crate::add::{
     add_0_r, add_assoc, add_comm, add_succ_l, add_succ_r, eq_add_0_r, neq_0_succ, succ_inj,
 };
-use crate::boxing::TheoremBox;
-use crate::eq::TheoremEq;
-use crate::util::{prove, prove_with_script, Memo};
+use crate::util::{prove_with_script, Memo};
 use kernel::pa_axiom::Theorem;
 
 #[cfg(test)]
@@ -211,61 +209,67 @@ fn mult_is_1_r_succ() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
-        boxes.push_var("x")?;
-        boxes.push_var("y")?;
-        let _ih = boxes.push_and_get("S(x) * y = 1 -> y = 1")?;
-
-        let hyp = boxes.push_and_get("S(x) * S(y) = 1")?;
-        let t1 = boxes
-            .chain("S(x * S(y) + y)")?
-            .equals("x * S(y) + S(y)", add_succ_r())?
-            .equals("S(x) * S(y)", mul_succ_l())?
-            .equals("S(0)", hyp)?;
-        let t2 = succ_inj().import_as(&boxes, "S(x * S(y) + y) = S(0) -> x * S(y) + y = 0")?;
-        let t3 = t2.box_mp(t1, &boxes)?;
-        t3.box_chk("x * S(y) + y = 0", &boxes);
-        let t4 = eq_add_0_r().import_as(&boxes, "x * S(y) + y = 0 -> y = 0")?;
-        let t5 = t4.box_mp(t3, &boxes)?;
-        t5.box_chk("y = 0", &boxes);
-        let ti = boxes.chain("S(y)")?.equals("S(0)", t5)?;
-        boxes.pop()?;
-        boxes.pop()?;
-        boxes.pop()?;
-
-        let hyp0 = boxes.push_and_get("S(x) * 0 = 1")?;
-        let t0 = boxes
-            .chain("0")?
-            .equals("S(x) * 0", mul_0_r())?
-            .equals("1", hyp0)?;
-        boxes.pop()?;
-        ti.induction(t0, &boxes)
-    })
+    prove_with_script(
+        &RESULT,
+        "
+var x {
+    var y {
+        hyp S(x) * y = 1 -> y = 1
+        {
+            hyp S(x) * S(y) = 1 {
+                chain S(x * S(y) + y)
+                    = x * S(y) + S(y)
+                    = S(x) * S(y)
+                    = S(0);
+                import S(x * S(y) + y) = S(0) -> x * S(y) + y = 0;
+                mp x * S(y) + y = 0;
+                import x * S(y) + y = 0 -> y = 0;
+                mp y = 0;
+                chain S(y) = S(0);
+            }
+        }
+    }
+    hyp S(x) * 0 = 1
+    {
+        chain 0
+            = S(x) * 0
+            = 1;
+    }
+    induction;
+}",
+        &[
+            add_succ_r(),
+            mul_succ_l(),
+            succ_inj(),
+            eq_add_0_r(),
+            mul_0_r(),
+        ],
+    )
 }
 
 pub fn mult_is_1_r() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
-        boxes.push_var("y")?;
-        boxes.push_var("x")?;
-        let _ih = boxes.push_and_get("x * y = 1 -> y = 1")?;
-        let ti = mult_is_1_r_succ().import_as(&boxes, "S(x) * y = 1 -> y = 1")?;
-        boxes.pop()?;
-        boxes.pop()?;
-
-        let hyp = boxes.push_and_get("0 * y = 1")?;
-        let t1 = boxes
-            .chain("0")?
-            .equals("0 * y", mul_0_l())?
-            .equals("S(0)", hyp)?;
-        let t0 = neq_0_succ()
-            .import_as(&boxes, "!(0 = S(0))")?
-            .box_mp(t1, &boxes)?
-            .contradiction("y = 1", &boxes)?;
-        boxes.pop()?;
-
-        ti.induction(t0, &boxes)
-    })
+    prove_with_script(
+        &RESULT,
+        "
+var y {
+    var x {
+        hyp x * y = 1 -> y = 1
+        {
+            import S(x) * y = 1 -> y = 1;
+        }
+    }
+    hyp 0 * y = 1
+    {
+        chain 0 = 0 * y = 1;
+        import !(0 = 1);
+        mp false;
+        exfalso y = 1;
+    }
+    induction;
+}",
+        &[mult_is_1_r_succ(), mul_0_l(), neq_0_succ()],
+    )
 }
