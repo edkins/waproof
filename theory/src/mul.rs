@@ -3,7 +3,7 @@ use crate::add::{
 };
 use crate::boxing::TheoremBox;
 use crate::eq::TheoremEq;
-use crate::util::{prove, Memo};
+use crate::util::{prove, prove_with_script, Memo};
 use kernel::pa_axiom::Theorem;
 
 #[cfg(test)]
@@ -37,161 +37,174 @@ pub fn mul_0_l() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
-        boxes.push_var("x")?;
-        let ih = boxes.push_and_get("0 * x = 0")?;
-
-        // Inductive step
-        let ti = boxes
-            .chain("0 * S(x)")?
-            .equals("0 * x + 0", mul_succ_r())?
-            .equals("0 + 0", ih)?
-            .equals("0", add_0_r())?;
-        boxes.pop()?;
-        boxes.pop()?;
-
-        let t0 = boxes.chain("0 * 0")?.equals("0", mul_0_r())?;
-
-        ti.induction(t0, &boxes)
-    })
+    prove_with_script(
+        &RESULT,
+        "
+var x {
+    hyp 0 * x = 0
+    {
+        chain 0 * S(x)
+            = 0 * x + 0
+            = 0 + 0
+            = 0;
+    }
+}
+chain 0 * 0 = 0;
+induction;",
+        &[mul_succ_r(), add_0_r(), mul_0_r()],
+    )
 }
 
 pub fn mul_succ_l() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
-        boxes.push_var("x")?;
-        boxes.push_var("y")?;
-        let ih = boxes.push_and_get("S(x) * y = x * y + y")?;
-
-        // Inductive step
-        let ti = boxes
-            .chain("S(x) * S(y)")?
-            .equals("S(x) * y + S(x)", mul_succ_r())?
-            .equals("(x * y + y) + S(x)", ih)?
-            .equals("x * y + (y + S(x))", add_assoc())?
-            .equals("x * y + (S(y + x))", add_succ_r())?
-            .equals("x * y + (S(y) + x)", add_succ_l())?
-            .equals("x * y + (x + S(y))", add_comm())?
-            .equals("(x * y + x) + S(y)", add_assoc())?
-            .equals("x * S(y) + S(y)", mul_succ_r())?;
-        boxes.pop()?;
-        boxes.pop()?;
-
-        // Base case
-        let t0 = boxes
-            .chain("S(x) * 0")?
-            .equals("0", mul_0_r())?
-            .equals("0 + 0", add_0_r())?
-            .equals("x * 0 + 0", mul_0_r())?;
-
-        ti.induction(t0, &boxes)
-    })
+    prove_with_script(
+        &RESULT,
+        "
+var x {
+    var y {
+        hyp S(x) * y = x * y + y
+        {
+            chain S(x) * S(y)
+                = S(x) * y + S(x)
+                = (x * y + y) + S(x)
+                = x * y + (y + S(x))
+                = x * y + (S(y + x))
+                = x * y + (S(y) + x)
+                = x * y + (x + S(y))
+                = (x * y + x) + S(y)
+                = x * S(y) + S(y);
+        }
+    }
+    chain S(x) * 0
+        = 0
+        = 0 + 0
+        = x * 0 + 0;
+    induction;
+}",
+        &[
+            mul_succ_r(),
+            add_assoc(),
+            add_succ_r(),
+            add_succ_l(),
+            add_comm(),
+            mul_0_r(),
+            add_0_r(),
+        ],
+    )
 }
 
 pub fn mul_comm() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
-        boxes.push_var("x")?;
-        boxes.push_var("y")?;
-        let ih = boxes.push_and_get("x * y = y * x")?;
-
-        let ti = boxes
-            .chain("x * S(y)")?
-            .equals("x * y + x", mul_succ_r())?
-            .equals("y * x + x", ih)?
-            .equals("S(y) * x", mul_succ_l())?;
-        boxes.pop()?;
-        boxes.pop()?;
-        let t0 = boxes
-            .chain("x * 0")?
-            .equals("0", mul_0_r())?
-            .equals("0 * x", mul_0_l())?;
-
-        ti.induction(t0, &boxes)
-    })
+    prove_with_script(
+        &RESULT,
+        "
+var x {
+    var y {
+        hyp x * y = y * x
+        {
+            chain x * S(y)
+                = x * y + x
+                = y * x + x
+                = S(y) * x;
+        }
+    }
+    chain x * 0 = 0 = 0 * x;
+    induction;
+}",
+        &[mul_succ_r(), mul_succ_l(), mul_0_r(), mul_0_l()],
+    )
 }
 
 pub fn mul_add_distr_l() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
-        boxes.push_var("x")?;
-        boxes.push_var("y")?;
-        boxes.push_var("z")?;
-        let ih = boxes.push_and_get("(x + y) * z = x * z + y * z")?;
-
-        let ti = boxes
-            .chain("(x + y) * S(z)")?
-            .equals("(x + y) * z + (x + y)", mul_succ_r())?
-            .equals("(x * z + y * z) + (x + y)", ih)?
-            .equals("(x * z + y * z) + (y + x)", add_comm())?
-            .equals("x * z + (y * z + (y + x))", add_assoc())?
-            .equals("x * z + ((y * z + y) + x)", add_assoc())?
-            .equals("x * z + (x + (y * z + y))", add_comm())?
-            .equals("(x * z + x) + (y * z + y)", add_assoc())?
-            .equals("(x * S(z)) + (y * z + y)", mul_succ_r())?
-            .equals("(x * S(z)) + (y * S(z))", mul_succ_r())?;
-        boxes.pop()?;
-        boxes.pop()?;
-        let t0 = boxes
-            .chain("(x + y) * 0")?
-            .equals("0", mul_0_r())?
-            .equals("0 + 0", add_0_r())?
-            .equals("x * 0 + 0", mul_0_r())?
-            .equals("x * 0 + y * 0", mul_0_r())?;
-
-        ti.induction(t0, &boxes)
-    })
+    prove_with_script(
+        &RESULT,
+        "
+var x {
+    var y {
+        var z {
+            hyp (x + y) * z = x * z + y * z
+            {
+                chain (x + y) * S(z)
+                    = (x + y) * z + (x + y)
+                    = (x * z + y * z) + (x + y)
+                    = (x * z + y * z) + (y + x)
+                    = x * z + (y * z + (y + x))
+                    = x * z + ((y * z + y) + x)
+                    = x * z + (x + (y * z + y))
+                    = (x * z + x) + (y * z + y)
+                    = (x * S(z)) + (y * z + y)
+                    = (x * S(z)) + (y * S(z));
+            }
+        }
+        chain (x + y) * 0
+            = 0
+            = 0 + 0
+            = x * 0 + 0
+            = x * 0 + y * 0;
+        induction;
+    }
+}",
+        &[mul_succ_r(), add_comm(), add_assoc(), mul_0_r(), add_0_r()],
+    )
 }
 
 pub fn mul_add_distr_r() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
-        boxes.push_var("x")?;
-        boxes.push_var("y")?;
-        boxes.push_var("z")?;
-        boxes
-            .chain("x * (y + z)")?
-            .equals("(y + z) * x", mul_comm())?
-            .equals("y * x + z * x", mul_add_distr_l())?
-            .equals("x * y + z * x", mul_comm())?
-            .equals("x * y + x * z", mul_comm())
-    })
+    prove_with_script(
+        &RESULT,
+        "
+var x {
+    var y {
+        var z {
+            chain x * (y + z)
+                = (y + z) * x
+                = y * x + z * x
+                = x * y + z * x
+                = x * y + x * z;
+        }
+    }
+}",
+        &[mul_comm(), mul_add_distr_l()],
+    )
 }
 
 pub fn mul_assoc() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
-        boxes.push_var("x")?;
-        boxes.push_var("y")?;
-        boxes.push_var("z")?;
-        let ih = boxes.push_and_get("x * (y * z) = (x * y) * z")?;
-
-        let ti = boxes
-            .chain("x * (y * S(z))")?
-            .equals("x * (y * z + y)", mul_succ_r())?
-            .equals("x * (y * z) + x * y", mul_add_distr_r())?
-            .equals("(x * y) * z + x * y", ih)?
-            .equals("(x * y) * S(z)", mul_succ_r())?;
-        boxes.pop()?;
-        boxes.pop()?;
-        let t0 = boxes
-            .chain("x * (y * 0)")?
-            .equals("x * 0", mul_0_r())?
-            .equals("0", mul_0_r())?
-            .equals("(x * y) * 0", mul_0_r())?;
-
-        ti.induction(t0, &boxes)
-    })
+    prove_with_script(
+        &RESULT,
+        "
+var x {
+    var y {
+        var z {
+            hyp x * (y * z) = (x * y) * z
+            {
+                chain x * (y * S(z))
+                    = x * (y * z + y)
+                    = x * (y * z) + x * y
+                    = (x * y) * z + x * y
+                    = (x * y) * S(z);
+            }
+        }
+        chain x * (y * 0)
+            = x * 0
+            = 0
+            = (x * y) * 0;
+        induction;
+    }
+}",
+        &[mul_succ_r(), mul_add_distr_r(), mul_0_r()],
+    )
 }
 
 fn mult_is_1_r_succ() -> Theorem {

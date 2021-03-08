@@ -56,87 +56,78 @@ pub fn add_succ_l() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
-        boxes.push_var("x")?;
-        boxes.push_var("y")?;
-        let ih = boxes.push_and_get("S(x) + y = S(x + y)")?;
-
-        // Inductive step
-        let ti = boxes
-            .chain("S(x) + S(y)")?
-            .equals("S(S(x) + y)", add_succ_r())?
-            .equals("S(S(x + y))", ih)?
-            .equals("S(x + S(y))", add_succ_r())?;
-        boxes.pop()?;
-        boxes.pop()?;
-
-        // Base case
-        let t0 = boxes
-            .chain("S(x) + 0")?
-            .equals("S(x)", add_0_r())?
-            .equals("S(x + 0)", add_0_r())?;
-
-        ti.induction(t0, &boxes)
-    })
+    prove_with_script(
+        &RESULT,
+        "
+var x {
+    var y {
+        hyp S(x) + y = S(x + y)
+        {
+            chain S(x) + S(y)
+                = S(S(x) + y)
+                = S(S(x + y))
+                = S(x + S(y));
+        }
+    }
+    chain S(x) + 0
+        = S(x)
+        = S(x + 0);
+    induction;
+}",
+        &[add_succ_r(), add_0_r()],
+    )
 }
 
 pub fn add_comm() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
-        boxes.push_var("x")?;
-        boxes.push_var("y")?;
-        let ih = boxes.push_and_get("x + y = y + x")?;
-
-        // Inductive step
-        let ti = boxes
-            .chain("x + S(y)")?
-            .equals("S(x + y)", add_succ_r())?
-            .equals("S(y + x)", ih)?
-            .equals("S(y) + x", add_succ_l())?;
-
-        boxes.pop()?;
-        boxes.pop()?;
-
-        // Base case
-        let t0 = boxes
-            .chain("x + 0")?
-            .equals("x", add_0_r())?
-            .equals("0 + x", add_0_l())?;
-
-        ti.induction(t0, &boxes)
-    })
+    prove_with_script(
+        &RESULT,
+        "
+var x {
+    var y {
+        hyp x + y = y + x {
+            chain x + S(y)
+                = S(x + y)
+                = S(y + x)
+                = S(y) + x;
+        }
+    }
+    chain x + 0 = x = 0 + x;
+    induction;
+}",
+        &[add_succ_r(), add_succ_l(), add_0_r(), add_0_l()],
+    )
 }
 
 pub fn add_assoc() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
-        boxes.push_var("x")?;
-        boxes.push_var("y")?;
-        boxes.push_var("z")?;
-        let ih = boxes.push_and_get("x + (y + z) = (x + y) + z")?;
-
-        // Inductive step
-        let ti = boxes
-            .chain("x + (y + S(z))")?
-            .equals("x + S(y + z)", add_succ_r())?
-            .equals("S(x + (y + z))", add_succ_r())?
-            .equals("S((x + y) + z)", ih)?
-            .equals("(x + y) + S(z)", add_succ_r())?;
-        boxes.pop()?;
-        boxes.pop()?;
-
-        // Base case
-        let t0 = boxes
-            .chain("x + (y + 0)")?
-            .equals("x + y", add_0_r())?
-            .equals("(x + y) + 0", add_0_r())?;
-
-        ti.induction(t0, &boxes)
-    })
+    prove_with_script(
+        &RESULT,
+        "
+var x {
+    var y {
+        var z {
+            hyp x + (y + z) = (x + y) + z
+            {
+                chain x + (y + S(z))
+                    = x + S(y + z)
+                    = S(x + (y + z))
+                    = S((x + y) + z)
+                    = (x + y) + S(z);
+            }
+        }
+        chain x + (y + 0)
+            = x + y
+            = (x + y) + 0;
+        induction;
+    }
+}",
+        &[add_succ_r(), add_0_r()],
+    )
 }
 
 pub fn succ_inj() -> Theorem {
