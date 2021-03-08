@@ -287,6 +287,25 @@ impl Boxes {
     }
 }
 
+#[derive(Clone)]
+pub struct MultiTheoremEqualizer(pub Vec<Theorem>);
+
+impl Equalizer for MultiTheoremEqualizer {
+    fn prove_eq(
+        &self,
+        left: &Expr,
+        right: &Expr,
+        boxes: &[Boxing],
+    ) -> Result<Theorem, TheoryError> {
+        for th in &self.0 {
+            if let Ok(t) = th.prove_eq(left, right, boxes) {
+                return Ok(t);
+            }
+        }
+        Err(TheoryError::NoSuitableTheoremFound)
+    }
+}
+
 impl Equalizer for Theorem {
     fn prove_eq(
         &self,

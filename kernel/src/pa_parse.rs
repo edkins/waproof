@@ -37,11 +37,11 @@ impl From<SyntaxError> for ParseError {
     }
 }
 
-fn syn(e: SyntaxError) -> nom::Err<ParseError> {
+pub fn syn(e: SyntaxError) -> nom::Err<ParseError> {
     nom::Err::Error(ParseError::Syntax(e))
 }
 
-fn extract_parse_error(e: nom::Err<ParseError>) -> ParseError {
+pub fn extract_parse_error(e: nom::Err<ParseError>) -> ParseError {
     match e {
         nom::Err::Incomplete(_) => ParseError::Incomplete,
         nom::Err::Error(e) | nom::Err::Failure(e) => e,
@@ -68,7 +68,7 @@ fn not_at_alphanum(input: &str) -> IResult<&str, (), ParseError> {
     }
 }
 
-fn parse_sym(sym: &'static str) -> impl Fn(&str) -> IResult<&str, (), ParseError> {
+pub fn parse_sym(sym: &'static str) -> impl Fn(&str) -> IResult<&str, (), ParseError> {
     move |input| {
         let (input, _) = multispace0(input)?;
         let (input, _) = tag(sym)(input)?;
@@ -76,7 +76,7 @@ fn parse_sym(sym: &'static str) -> impl Fn(&str) -> IResult<&str, (), ParseError
     }
 }
 
-fn parse_keyword(sym: &'static str) -> impl Fn(&str) -> IResult<&str, (), ParseError> {
+pub fn parse_keyword(sym: &'static str) -> impl Fn(&str) -> IResult<&str, (), ParseError> {
     move |input| {
         let (input, _) = multispace0(input)?;
         let (input, _) = tag(sym)(input)?;
@@ -85,7 +85,7 @@ fn parse_keyword(sym: &'static str) -> impl Fn(&str) -> IResult<&str, (), ParseE
     }
 }
 
-fn parse_var_str(input: &str) -> IResult<&str, &str, ParseError> {
+pub fn parse_var_str(input: &str) -> IResult<&str, &str, ParseError> {
     let (input, _) = multispace0(input)?;
     let (input, word) = recognize(pair(satisfy(starts_word), take_while(continues_word)))(input)?;
     Ok((input, word))
@@ -132,7 +132,7 @@ fn parse_muls(input: &str) -> IResult<&str, Expr, ParseError> {
     Ok((input, r))
 }
 
-fn parse_expr(input: &str) -> IResult<&str, Expr, ParseError> {
+pub fn parse_expr(input: &str) -> IResult<&str, Expr, ParseError> {
     let (input, a) = parse_muls(input)?;
     let (input, mb) = opt(preceded(parse_sym("+"), parse_expr))(input)?;
     let r = match mb {
@@ -146,7 +146,7 @@ impl FromStr for Expr {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(terminated(all_consuming(parse_expr), multispace0)(s)
+        Ok(all_consuming(terminated(parse_expr, multispace0))(s)
             .map_err(extract_parse_error)?
             .1)
     }
@@ -217,7 +217,7 @@ fn parse_ands(input: &str) -> IResult<&str, Formula, ParseError> {
     Ok((input, r))
 }
 
-fn parse_formula(input: &str) -> IResult<&str, Formula, ParseError> {
+pub fn parse_formula(input: &str) -> IResult<&str, Formula, ParseError> {
     let (input, a) = parse_ands(input)?;
     let (input, mb) = opt(preceded(parse_sym("|"), parse_formula))(input)?;
     let r = match mb {
@@ -231,7 +231,7 @@ impl FromStr for Formula {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let result = terminated(all_consuming(parse_formula), multispace0)(s)
+        let result = all_consuming(terminated(parse_formula, multispace0))(s)
             .map_err(extract_parse_error)?
             .1;
         Ok(result)

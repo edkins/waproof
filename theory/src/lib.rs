@@ -4,6 +4,7 @@ pub mod coprime;
 pub mod eq;
 pub mod equalizer;
 pub mod gen;
-//pub mod hyp;
 pub mod mul;
+pub mod process;
+pub mod script;
 pub mod util;

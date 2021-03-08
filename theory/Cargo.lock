@@ -104,6 +104,7 @@ name = "theory"
 version = "0.1.0"
 dependencies = [
  "kernel",
+ "nom",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 use crate::boxing::TheoremBox;
 use crate::eq::TheoremEq;
-use crate::util::{prove, Memo};
+use crate::util::{prove, prove_with_script, Memo};
 use kernel::pa_axiom::Theorem;
 
 #[cfg(test)]
@@ -31,26 +31,25 @@ pub fn add_succ_r() -> Theorem {
     Theorem::aa2()
 }
 
-pub fn add_0_l() -> Theorem {
+fn add_0_l() -> Theorem {
     thread_local! {
         static RESULT: Memo = Memo::default();
     }
-    prove(&RESULT, |mut boxes| {
-        boxes.push_var("x")?;
-        let ih = boxes.push_and_get("0 + x = x")?;
-
-        // Inductive step
-        let ti = boxes
-            .chain("0 + S(x)")?
-            .equals("S(0 + x)", add_succ_r())?
-            .equals("S(x)", ih)?;
-        boxes.pop()?;
-        boxes.pop()?;
-
-        let t0 = boxes.chain("0 + 0")?.equals("0", add_0_r())?;
-
-        ti.induction(t0, &boxes)
-    })
+    prove_with_script(
+        &RESULT,
+        "
+var x
+{
+    hyp 0 + x = x
+    {
+        chain 0 + S(x) = S(0 + x) = S(x);
+    }
+}
+chain 0 + 0 = 0;
+induction;
+",
+        &[add_succ_r(), add_0_r()],
+    )
 }
 
 pub fn add_succ_l() -> Theorem {

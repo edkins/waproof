@@ -1,4 +1,5 @@
 use crate::boxing::Boxes;
+use crate::process;
 use kernel::pa_axiom::{Theorem, TheoremError};
 use kernel::pa_formula::SyntaxError;
 use kernel::pa_parse::ParseError;
@@ -17,6 +18,8 @@ pub enum TheoryError {
     CheckMismatch(String),
     ComposeMismatch,
     ImportDepthTooGreat,
+    NoSuitableTheoremFound,
+    NoTheorem,
     NotAbsentGen(String),
     NotEquality,
     NotFalse,
@@ -32,6 +35,7 @@ pub enum TheoryError {
     SubstNotInEnvironment(String),
     SubstInnerConflict(String),
     SubstOuterConflict(String),
+    UnclosedBox,
     VarMismatch(String, String),
     WrongHyp,
 }
@@ -64,6 +68,20 @@ pub fn prove(
     result.with(|r| {
         r.0.borrow_mut()
             .get_or_insert_with(|| func(Boxes::default()).expect("proof failure"))
+            .clone()
+    })
+}
+
+pub fn prove_with_script(
+    result: &'static std::thread::LocalKey<Memo>,
+    script: &str,
+    references: &[Theorem],
+) -> Theorem {
+    result.with(|r| {
+        r.0.borrow_mut()
+            .get_or_insert_with(|| {
+                process::prove_script(script, references).expect("proof failure")
+            })
             .clone()
     })
 }
