@@ -1,0 +1,47 @@
+<html>
+  <head>
+  <meta charset="utf-8">
+  <script>
+"use strict";
+
+function create_mem(str) {
+  const mem = new WebAssembly.Memory({initial:1});
+  const i8 = new Uint8Array(mem.buffer);
+  for (let i = 0; i < str.length; i++) {
+    i8[i] = str.charCodeAt(i);
+  }
+  console.log(i8);
+  console.log(mem);
+  return mem;
+}
+
+function dump_mem(mem) {
+  const i8 = new Uint8Array(mem.buffer);
+  console.log(i8);
+}
+
+async function load_wasm(buffer) {
+  const mem = create_mem('hello');
+  const obj = await WebAssembly.instantiate(buffer, {js:{mem}});
+  dump_mem(mem);
+  obj.instance.exports.reverse(0,5);
+  dump_mem(mem);
+}
+
+async function load_script() {
+  const fileList = document.getElementById('file').files;
+  if (fileList.length === 1) {
+    const buffer = await new Promise((resolve,reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result);
+      fr.readAsArrayBuffer(fileList[0]);
+    });
+    await load_wasm(buffer);
+  }
+}
+  </script>
+  </head>
+  <body>
+    <input type="file" onchange="load_script()" id="file">
+  </body>
+</html>
