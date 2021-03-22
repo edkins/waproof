@@ -4,6 +4,36 @@ mod assembler;
 mod lang;
 
 fn main() {
+    reverse();
+}
+
+#[test]
+fn tests() {
+    slice_get();
+    reverse();
+}
+
+fn reverse() {
+    let func = Func {
+        params: vec![
+            FullType::I8Slice(Param::Param(0)),
+            FullType::I32,
+        ],
+        result: None,
+        locals: vec![],
+        hidden: vec![],
+        preconditions: vec![],
+        body: vec![
+            Asm::LocalGet(0, Tactic::Default),
+            Asm::LocalGet(1, Tactic::Default),
+            Asm::I32Add(Tactic::Default),
+            Asm::LocalSet(1, Tactic::Default),
+        ]
+    };
+    assembler::assemble(&func);
+}
+
+fn slice_get() {
     let func = Func {
         params: vec![
             FullType::I8Slice(Param::Hidden(0)),

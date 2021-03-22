@@ -1,10 +1,20 @@
 use crate::lang::{Asm,Expr,FullType,Func,Param,Tactic,Type};
 
-#[derive(Clone,Debug,Eq,PartialEq)]
+#[derive(Clone,Eq,PartialEq)]
 enum VarExpr {
     I32Const(u32),
     I32Param(Param),
     I32Add(Box<VarExpr>, Box<VarExpr>),
+}
+
+impl std::fmt::Debug for VarExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            VarExpr::I32Const(n) => write!(f, "{}", n),
+            VarExpr::I32Param(p) => write!(f, "{:?}", p),
+            VarExpr::I32Add(a,b) => write!(f, "({:?} + {:?})", a, b),
+        }
+    }
 }
 
 impl VarExpr {
@@ -72,21 +82,57 @@ impl MachineFacts {
         }
         panic!("Could not establish {:?}", e);
     }
+
+    pub fn show_diff(&self, other: &Self) {
+        let mut i = 0;
+        loop {
+            if i >= self.stack.len() { break; }
+            if i >= other.stack.len() { break; }
+            if self.stack[i] != other.stack[i] { break; }
+            i += 1;
+        }
+        print!("    [");
+        for _ in 0..i {
+            print!(".");
+        }
+        print!("] ");
+        for _ in i..self.stack.len() {
+            print!("-");
+        }
+        for item in &other.stack[i..] {
+            print!(" {:?}", item);
+        }
+        println!();
+
+        for i in 0..self.locals.len() {
+            if self.locals[i] != other.locals[i] {
+                if i < self.param_types.len() {
+                    println!("    p{} = {:?}", i, other.locals[i]);
+                } else {
+                    println!("    l{} = {:?}", i - self.param_types.len(), other.locals[i]);
+                }
+            }
+        }
+    }
 }
 
 pub fn assemble(func: &Func) {
     let mut machine = MachineFacts::start_of_func(func);
+    println!("{:?}", machine);
     for instr in &func.body {
+        let prev_machine = machine.clone();
         match instr {
             Asm::I32Const(n, Tactic::Default) => i32_const_default(&mut machine, *n),
             Asm::I32Add(Tactic::Default) => i32_add_default(&mut machine),
             Asm::I8Load(offset, align, Tactic::BasePlusOffset) => i8_load_base_plus_offset(&mut machine, *offset, *align),
             Asm::LocalGet(i, Tactic::Default) => local_get_default(&mut machine, *i),
+            Asm::LocalSet(i, Tactic::Default) => local_set_default(&mut machine, *i),
             _ => {
                 panic!("Cannot handle instr and/or tactic {:?}", instr);
             }
         }
-        println!("{:?} -- {:?}", instr, machine);
+        println!("{:?}", instr);
+        prev_machine.show_diff(&machine);
     }
 }
 
@@ -128,6 +174,22 @@ fn local_get_default(machine: &mut MachineFacts, i: u32) {
         panic!("Local index out of range: {} out of {}", i, machine.locals.len());
     }
     machine.stack.push(machine.locals[i].clone());
+}
+
+fn local_set_default(machine: &mut MachineFacts, i: u32) {
+    let i = i as usize;
+    if i >= machine.locals.len() {
+        panic!("Local index out of range: {} out of {}", i, machine.locals.len());
+    }
+    if let Some(a) = machine.stack.pop() {
+        if machine.locals[i].typ() == a.typ() {
+            machine.locals[i] = a;
+        } else {
+            panic!("Storing in local of incorrect type, {:?} vs {:?}", machine.locals[i].typ(), a.typ());
+        }
+    } else {
+        panic!("Expected one item on the stack");
+    }
 }
 
 fn i32_const_default(machine: &mut MachineFacts, n: u32) {

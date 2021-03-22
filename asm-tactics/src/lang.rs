@@ -4,6 +4,7 @@ pub enum Asm {
     I32Add(Tactic),
     I8Load(u32, u32, Tactic),
     LocalGet(u32, Tactic),
+    LocalSet(u32, Tactic),
 }
 
 #[derive(Clone,Debug,Eq,PartialEq)]
@@ -11,10 +12,19 @@ pub enum Type {
     I32,
 }
 
-#[derive(Clone,Debug,Eq,PartialEq)]
+#[derive(Clone,Eq,PartialEq)]
 pub enum Param {
     Param(usize),
     Hidden(usize),
+}
+
+impl std::fmt::Debug for Param {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Param::Param(i) => write!(f, "P{}", i),
+            Param::Hidden(i) => write!(f, "H{}", i),
+        }
+    }
 }
 
 impl Param {
