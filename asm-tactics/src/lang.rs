@@ -35,12 +35,6 @@ impl std::fmt::Debug for Param {
     }
 }
 
-impl Param {
-    pub fn expr(&self) -> Expr {
-        Expr::Param(self.clone())
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FullType {
     I32,
@@ -87,21 +81,7 @@ pub enum LoopTactic {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Expr {
-    Const(u32),
-    Param(Param),
-    Le(Box<Expr>, Box<Expr>),
-    Lt(Box<Expr>, Box<Expr>),
     U32Lt(VarExpr, VarExpr),
-}
-
-impl Expr {
-    pub fn le(self, other: Self) -> Self {
-        Expr::Le(Box::new(self), Box::new(other))
-    }
-
-    pub fn lt(self, other: Self) -> Self {
-        Expr::Lt(Box::new(self), Box::new(other))
-    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -147,7 +127,7 @@ impl VarExpr {
                 }
                 let xs = map
                     .iter()
-                    .filter(|(x, n)| **n != 0)
+                    .filter(|(_, n)| **n != 0)
                     .map(|(x, n)| (x.clone(), n.clone()))
                     .collect();
                 VarExpr::I32Linear(k, xs)
@@ -169,7 +149,7 @@ impl VarExpr {
                 k.wrapping_mul(scale),
                 xs.iter()
                     .map(|(x, n)| (x.clone(), n.wrapping_mul(scale)))
-                    .filter(|(x, n)| *n != 0)
+                    .filter(|(_, n)| *n != 0)
                     .collect(),
             ), //_ => panic!("i32_scale: expected i32")
         }

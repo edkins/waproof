@@ -114,30 +114,27 @@ impl MachineFacts {
     }
 
     pub fn get_i32_base_offset(&self, expr: &VarExpr) -> (Param, VarExpr) {
-        if let VarExpr::I32Linear(_, xs) = expr {
-            let mut result = None;
-            for (x, n) in xs {
-                if self.get_param_type(x).is_address() {
-                    if result.is_some() {
-                        panic!("get_i32_base_offset: can't combine multiple addresses");
-                    }
-                    if *n != 1 {
-                        panic!(
-                            "get_i32_base_offset: coefficient on address must be 1, got {}",
-                            n
-                        );
-                    }
-                    result = Some(x.clone());
+        let VarExpr::I32Linear(_, xs) = expr;
+        let mut result = None;
+        for (x, n) in xs {
+            if self.get_param_type(x).is_address() {
+                if result.is_some() {
+                    panic!("get_i32_base_offset: can't combine multiple addresses");
                 }
+                if *n != 1 {
+                    panic!(
+                        "get_i32_base_offset: coefficient on address must be 1, got {}",
+                        n
+                    );
+                }
+                result = Some(x.clone());
             }
+        }
 
-            if let Some(p) = result {
-                (p.clone(), expr.i32_sub(&VarExpr::i32param_or_hidden(&p)))
-            } else {
-                panic!("get_i32_base_offset: no address detected");
-            }
+        if let Some(p) = result {
+            (p.clone(), expr.i32_sub(&VarExpr::i32param_or_hidden(&p)))
         } else {
-            panic!("get_i32_base_offset: expected I32Linear");
+            panic!("get_i32_base_offset: no address detected");
         }
     }
 }

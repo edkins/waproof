@@ -1,10 +1,20 @@
-use crate::lang::{Asm, BlockType, Expr, FullType, Func, LoopTactic, Param, Tactic, VarExpr};
+use crate::lang::{Asm, BlockType, FullType, Func, LoopTactic, Tactic, VarExpr};
+use clap::clap_app;
 
 mod assembler;
 mod lang;
 
 fn main() {
-    reverse();
+    let matches = clap_app!(asm_tactics =>
+    (@arg TEST: +required "Name of test to run")
+    )
+    .get_matches();
+    let test = matches.value_of("TEST").unwrap();
+    match test {
+        "slice_get" => slice_get(),
+        "reverse" => reverse(),
+        _ => panic!(),
+    }
 }
 
 #[test]
