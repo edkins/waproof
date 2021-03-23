@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Asm {
     I32Const(u32, Tactic),
@@ -18,7 +20,7 @@ pub enum BlockType {
     None,
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 pub enum Param {
     Param(usize),
     Hidden(usize),
@@ -42,13 +44,20 @@ impl Param {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FullType {
     I32,
-    I8Slice(Param),
+    I8Slice(VarExpr),
 }
 
 impl FullType {
     pub fn typ(&self) -> Type {
         match self {
             FullType::I32 | FullType::I8Slice(_) => Type::I32,
+        }
+    }
+
+    pub fn is_address(&self) -> bool {
+        match self {
+            FullType::I32 => false,
+            FullType::I8Slice(_) => true,
         }
     }
 }
@@ -82,6 +91,7 @@ pub enum Expr {
     Param(Param),
     Le(Box<Expr>, Box<Expr>),
     Lt(Box<Expr>, Box<Expr>),
+    U32Lt(VarExpr, VarExpr),
 }
 
 impl Expr {
@@ -96,30 +106,27 @@ impl Expr {
 
 #[derive(Clone, Eq, PartialEq)]
 pub enum VarExpr {
-    I32Const(u32),
-    I32Param(Param),
-    I32Add(Box<VarExpr>, Box<VarExpr>),
-    I32Sub(Box<VarExpr>, Box<VarExpr>),
+    I32Linear(u32, Vec<(Param, u32)>),
 }
 
 impl std::fmt::Debug for VarExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            VarExpr::I32Const(n) => write!(f, "{}", n),
-            VarExpr::I32Param(p) => write!(f, "{:?}", p),
-            VarExpr::I32Add(a, b) => write!(f, "({:?} + {:?})", a, b),
-            VarExpr::I32Sub(a, b) => write!(f, "({:?} - {:?})", a, b),
+            VarExpr::I32Linear(k, xs) => {
+                write!(f, "{}", *k as i32)?;
+                for (x, n) in xs {
+                    write!(f, "{:+}{:?}", *n as i32, x)?;
+                }
+            }
         }
+        Ok(())
     }
 }
 
 impl VarExpr {
     pub fn typ(&self) -> Type {
         match self {
-            VarExpr::I32Const(_)
-            | VarExpr::I32Param(_)
-            | VarExpr::I32Add(_, _)
-            | VarExpr::I32Sub(_, _) => Type::I32,
+            VarExpr::I32Linear(_, _) => Type::I32,
         }
     }
 
@@ -127,5 +134,68 @@ impl VarExpr {
         if self.typ() != Type::I32 {
             panic!("Expected i32, got {:?}", self.typ());
         }
+    }
+
+    pub fn i32_add(&self, other: &Self) -> Self {
+        match (self, other) {
+            (VarExpr::I32Linear(k0, xs0), VarExpr::I32Linear(k1, xs1)) => {
+                let k = k0.wrapping_add(*k1);
+                let mut map: HashMap<Param, u32> = HashMap::new();
+                for (x, n) in xs0.iter().chain(xs1.iter()) {
+                    let value = map.entry(x.clone()).or_insert(0);
+                    *value = value.wrapping_add(*n);
+                }
+                let xs = map
+                    .iter()
+                    .filter(|(x, n)| **n != 0)
+                    .map(|(x, n)| (x.clone(), n.clone()))
+                    .collect();
+                VarExpr::I32Linear(k, xs)
+            } //_ => panic!("i32_add: expected two i32's")
+        }
+    }
+
+    pub fn i32_sub(&self, other: &Self) -> Self {
+        self.i32_add(&other.i32_neg())
+    }
+
+    pub fn i32_neg(&self) -> Self {
+        self.i32_scale(u32::MAX)
+    }
+
+    pub fn i32_scale(&self, scale: u32) -> Self {
+        match self {
+            VarExpr::I32Linear(k, xs) => VarExpr::I32Linear(
+                k.wrapping_mul(scale),
+                xs.iter()
+                    .map(|(x, n)| (x.clone(), n.wrapping_mul(scale)))
+                    .filter(|(x, n)| *n != 0)
+                    .collect(),
+            ), //_ => panic!("i32_scale: expected i32")
+        }
+    }
+
+    pub fn u32_lt(&self, other: &Self) -> Expr {
+        Expr::U32Lt(self.clone(), other.clone())
+    }
+
+    pub fn zero() -> Self {
+        VarExpr::I32Linear(0, vec![])
+    }
+
+    pub fn i32const(k: u32) -> Self {
+        VarExpr::I32Linear(k, vec![])
+    }
+
+    pub fn i32param(i: usize) -> Self {
+        VarExpr::I32Linear(0, vec![(Param::Param(i), 1)])
+    }
+
+    pub fn i32hidden(i: usize) -> Self {
+        VarExpr::I32Linear(0, vec![(Param::Hidden(i), 1)])
+    }
+
+    pub fn i32param_or_hidden(p: &Param) -> Self {
+        VarExpr::I32Linear(0, vec![(p.clone(), 1)])
     }
 }

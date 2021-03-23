@@ -21,13 +21,13 @@ impl MachineFacts {
 
         for i in 0..func.params.len() {
             match func.params[i].typ() {
-                Type::I32 => locals.push(VarExpr::I32Param(Param::Param(i))),
+                Type::I32 => locals.push(VarExpr::i32param(i)),
             }
         }
 
         for local_type in &func.locals {
             match local_type {
-                Type::I32 => locals.push(VarExpr::I32Const(0)),
+                Type::I32 => locals.push(VarExpr::zero()),
             }
         }
 
@@ -112,6 +112,34 @@ impl MachineFacts {
             }
         }
     }
+
+    pub fn get_i32_base_offset(&self, expr: &VarExpr) -> (Param, VarExpr) {
+        if let VarExpr::I32Linear(_, xs) = expr {
+            let mut result = None;
+            for (x, n) in xs {
+                if self.get_param_type(x).is_address() {
+                    if result.is_some() {
+                        panic!("get_i32_base_offset: can't combine multiple addresses");
+                    }
+                    if *n != 1 {
+                        panic!(
+                            "get_i32_base_offset: coefficient on address must be 1, got {}",
+                            n
+                        );
+                    }
+                    result = Some(x.clone());
+                }
+            }
+
+            if let Some(p) = result {
+                (p.clone(), expr.i32_sub(&VarExpr::i32param_or_hidden(&p)))
+            } else {
+                panic!("get_i32_base_offset: no address detected");
+            }
+        } else {
+            panic!("get_i32_base_offset: expected I32Linear");
+        }
+    }
 }
 
 pub fn assemble(func: &Func) {
@@ -169,26 +197,15 @@ fn i8_load_base_plus_offset(machine: &mut MachineFacts, offset: u32, align: u32)
     }
     let addr = machine.pop_value();
     addr.panic_unless_i32();
-    if let VarExpr::I32Add(base, index) = &addr {
-        if let VarExpr::I32Param(base_param) = &**base {
-            if let VarExpr::I32Param(index_param) = &**index {
-                if let FullType::I8Slice(len_param) = machine.get_param_type(base_param) {
-                    machine.fact_check(&Expr::Const(0).le(index_param.expr()));
-                    machine.fact_check(&index_param.expr().lt(len_param.expr()));
-                } else {
-                    panic!(
-                        "Expected I8Slice for base, got {:?}",
-                        machine.get_param_type(base_param)
-                    );
-                }
-            } else {
-                panic!("Expected index to be a param, got {:?}", index);
-            }
-        } else {
-            panic!("Expected base to be a param, got {:?}", base);
-        }
+
+    let (base_param, index) = machine.get_i32_base_offset(&addr);
+    if let FullType::I8Slice(len_param) = machine.get_param_type(&base_param) {
+        machine.fact_check(&index.u32_lt(&len_param));
     } else {
-        panic!("Expected i32add(base, index) got {:?}", addr);
+        panic!(
+            "Expected I8Slice for base, got {:?}",
+            machine.get_param_type(&base_param)
+        );
     }
 }
 
@@ -226,7 +243,7 @@ fn local_set_default(machine: &mut MachineFacts, i: u32) {
 }
 
 fn i32_const_default(machine: &mut MachineFacts, n: u32) {
-    machine.push_value(VarExpr::I32Const(n));
+    machine.push_value(VarExpr::i32const(n));
 }
 
 fn i32_add_default(machine: &mut MachineFacts) {
@@ -234,5 +251,5 @@ fn i32_add_default(machine: &mut MachineFacts) {
     a.panic_unless_i32();
     let b = machine.pop_value();
     b.panic_unless_i32();
-    machine.push_value(VarExpr::I32Add(Box::new(a), Box::new(b)));
+    machine.push_value(a.i32_add(&b));
 }
