@@ -1,4 +1,6 @@
-use crate::lang::{Asm, BlockType, Expr, FullType, Func, LoopTactic, Param, Tactic, Type, VarExpr};
+use crate::lang::{
+    Asm, BlockType, Expr, FullType, Func, LoopTactic, Tactic, Type, VarExpr, VarTerm,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum StackItem {
@@ -40,10 +42,11 @@ impl MachineFacts {
         }
     }
 
-    pub fn get_param_type(&self, p: &Param) -> FullType {
-        match p {
-            Param::Param(i) => self.param_types[*i].clone(),
-            Param::Hidden(i) => self.hidden_types[*i].clone(),
+    pub fn get_term_type(&self, t: &VarTerm) -> FullType {
+        match t {
+            VarTerm::Param(i) => self.param_types[*i].clone(),
+            VarTerm::Hidden(i) => self.hidden_types[*i].clone(),
+            VarTerm::I32Load8(_, _) => FullType::I32,
         }
     }
 
@@ -113,11 +116,11 @@ impl MachineFacts {
         }
     }
 
-    pub fn get_i32_base_offset(&self, expr: &VarExpr) -> (Param, VarExpr) {
+    pub fn get_i32_base_offset(&self, expr: &VarExpr) -> (VarTerm, VarExpr) {
         let VarExpr::I32Linear(_, xs) = expr;
         let mut result = None;
         for (x, n) in xs {
-            if self.get_param_type(x).is_address() {
+            if self.get_term_type(x).is_address() {
                 if result.is_some() {
                     panic!("get_i32_base_offset: can't combine multiple addresses");
                 }
@@ -132,7 +135,7 @@ impl MachineFacts {
         }
 
         if let Some(p) = result {
-            (p.clone(), expr.i32_sub(&VarExpr::i32param_or_hidden(&p)))
+            (p.clone(), expr.i32_sub(&VarExpr::i32term(&p)))
         } else {
             panic!("get_i32_base_offset: no address detected");
         }
@@ -196,12 +199,13 @@ fn i8_load_base_plus_offset(machine: &mut MachineFacts, offset: u32, align: u32)
     addr.panic_unless_i32();
 
     let (base_param, index) = machine.get_i32_base_offset(&addr);
-    if let FullType::I8Slice(len_param) = machine.get_param_type(&base_param) {
+    if let FullType::I8Slice(len_param) = machine.get_term_type(&base_param) {
         machine.fact_check(&index.u32_lt(&len_param));
+        machine.push_value(VarExpr::i32term(&base_param.as_param().i32_load8(&index)));
     } else {
         panic!(
             "Expected I8Slice for base, got {:?}",
-            machine.get_param_type(&base_param)
+            machine.get_term_type(&base_param)
         );
     }
 }
