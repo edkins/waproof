@@ -1,5 +1,5 @@
 use crate::lang::{
-    Asm, BlockType, Expr, FullType, Func, LoopTactic, Tactic, Type, VarExpr, VarTerm,
+    Asm, BlockType, Expr, FullType, Func, LoopTactic, Param, Tactic, Type, VarExpr, VarTerm,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -57,6 +57,12 @@ impl MachineFacts {
             }
         }
         panic!("Could not establish {:?}", e);
+    }
+
+    pub fn local_value_check(&self, i: usize, value: &VarExpr) {
+        if self.locals[i] != *value {
+            panic!("Local {} is {:?}, not {:?}", i, self.locals[i], value);
+        }
     }
 
     pub fn pop_value(&mut self) -> VarExpr {
@@ -175,9 +181,11 @@ pub fn assemble(func: &Func) {
 
 fn loop_none_loop(machine: &mut MachineFacts, instr_pos: usize, tactics: &[LoopTactic]) {
     let mut hidden_count = 0;
+    let mut hidden_defs = vec![];
     for tactic in tactics {
-        if let LoopTactic::Hidden(t) = tactic {
-            machine.hidden_types.push(t.clone());
+        if let LoopTactic::Hidden(h) = tactic {
+            hidden_defs.push((Param::Hidden(machine.hidden_types.len()), h.clone()));
+            machine.hidden_types.push(h.fulltyp());
             hidden_count += 1;
         }
     }
@@ -185,7 +193,12 @@ fn loop_none_loop(machine: &mut MachineFacts, instr_pos: usize, tactics: &[LoopT
         .stack
         .push(StackItem::Loop(instr_pos, BlockType::None, hidden_count));
 
-    // TODO: check param things
+    for tactic in tactics {
+        if let LoopTactic::Local(i, value) = tactic {
+            let value2 = value.eval_params(&hidden_defs);
+            machine.local_value_check(*i, &value2);
+        }
+    }
 }
 
 fn i8_load_base_plus_offset(machine: &mut MachineFacts, offset: u32, align: u32) {

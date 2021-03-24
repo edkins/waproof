@@ -38,7 +38,7 @@ fn reverse() {
             Asm::Loop(
                 BlockType::None,
                 Tactic::Loop(vec![
-                    LoopTactic::Hidden(FullType::I32),
+                    LoopTactic::Hidden(VarExpr::zero()),
                     LoopTactic::Local(0, VarExpr::i32param(0).i32_add(&VarExpr::i32hidden(0))),
                     LoopTactic::Local(
                         1,

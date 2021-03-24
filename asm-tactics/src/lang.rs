@@ -37,6 +37,22 @@ impl Param {
     pub fn i32_load8(&self, i: &VarExpr) -> VarTerm {
         VarTerm::I32Load8(self.clone(), Box::new(i.clone()))
     }
+
+    pub fn as_expr(&self) -> VarExpr {
+        match self {
+            Param::Param(i) => VarExpr::i32param(*i), // TODO: what about not i32?
+            Param::Hidden(i) => VarExpr::i32hidden(*i),
+        }
+    }
+
+    pub fn eval_params(&self, values: &[(Param, VarExpr)]) -> VarExpr {
+        for (p, e) in values {
+            if p == self {
+                return e.clone();
+            }
+        }
+        self.as_expr()
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -79,7 +95,7 @@ pub enum Tactic {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LoopTactic {
-    Hidden(FullType),
+    Hidden(VarExpr),
     Local(usize, VarExpr),
 }
 
@@ -98,8 +114,8 @@ pub enum VarTerm {
 impl std::fmt::Debug for VarTerm {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            VarTerm::Param(i) => write!(f, "p{}", i),
-            VarTerm::Hidden(i) => write!(f, "p{}", i),
+            VarTerm::Param(i) => write!(f, "P{}", i),
+            VarTerm::Hidden(i) => write!(f, "H{}", i),
             VarTerm::I32Load8(p, e) => write!(f, "{:?}[{:?}]", p, e),
         }
     }
@@ -111,6 +127,17 @@ impl VarTerm {
             VarTerm::Param(i) => Param::Param(*i),
             VarTerm::Hidden(i) => Param::Hidden(*i),
             _ => panic!("Expected param or hidden, got {:?}", self),
+        }
+    }
+
+    pub fn eval_params(&self, values: &[(Param, VarExpr)]) -> VarExpr {
+        match self {
+            VarTerm::Param(i) => Param::Param(*i).eval_params(values),
+            VarTerm::Hidden(i) => Param::Hidden(*i).eval_params(values),
+            VarTerm::I32Load8(p, e) => VarExpr::i32term(&VarTerm::I32Load8(
+                p.clone(),
+                Box::new(e.eval_params(values)),
+            )),
         }
     }
 }
@@ -149,10 +176,38 @@ impl VarExpr {
         }
     }
 
+    pub fn fulltyp(&self) -> FullType {
+        match self {
+            VarExpr::I32Linear(_, _) => FullType::I32,
+        }
+    }
+
     pub fn panic_unless_i32(&self) {
         if self.typ() != Type::I32 {
             panic!("Expected i32, got {:?}", self.typ());
         }
+    }
+
+    fn canonical(k: u32, mut vec: Vec<(VarTerm, u32)>) -> Self {
+        vec.sort();
+        let mut result = vec![];
+        let mut last_x = None;
+        let mut last_n = 0u32;
+        for (x, n) in vec {
+            if last_x == Some(x.clone()) {
+                last_n = last_n.wrapping_add(n);
+            } else {
+                if last_n != 0 {
+                    result.push((last_x.unwrap().clone(), last_n));
+                }
+                last_x = Some(x);
+                last_n = n;
+            }
+        }
+        if last_n != 0 {
+            result.push((last_x.unwrap().clone(), last_n));
+        }
+        VarExpr::I32Linear(k, result)
     }
 
     pub fn i32_add(&self, other: &Self) -> Self {
@@ -161,26 +216,7 @@ impl VarExpr {
                 let k = k0.wrapping_add(*k1);
                 let mut vec = xs0.clone();
                 vec.extend_from_slice(&xs1);
-                vec.sort();
-
-                let mut result = vec![];
-                let mut last_x = None;
-                let mut last_n = 0u32;
-                for (x, n) in &vec {
-                    if last_x == Some(x) {
-                        last_n = last_n.wrapping_add(*n);
-                    } else {
-                        if last_n != 0 {
-                            result.push((last_x.unwrap().clone(), last_n));
-                        }
-                        last_x = Some(x);
-                        last_n = *n;
-                    }
-                }
-                if last_n != 0 {
-                    result.push((last_x.unwrap().clone(), last_n));
-                }
-                VarExpr::I32Linear(k, result)
+                Self::canonical(k, vec)
             }
         }
     }
@@ -227,5 +263,20 @@ impl VarExpr {
 
     pub fn i32term(t: &VarTerm) -> Self {
         VarExpr::I32Linear(0, vec![(t.clone(), 1)])
+    }
+
+    pub fn eval_params(&self, values: &[(Param, VarExpr)]) -> Self {
+        match self {
+            VarExpr::I32Linear(k, xs) => {
+                let mut k1 = *k;
+                let mut vec = vec![];
+                for (x, n) in xs {
+                    let VarExpr::I32Linear(nexpr_k, nexpr_xs) = x.eval_params(values).i32_scale(*n);
+                    k1 = k1.wrapping_add(nexpr_k);
+                    vec.extend_from_slice(&nexpr_xs);
+                }
+                Self::canonical(k1, vec)
+            }
+        }
     }
 }
