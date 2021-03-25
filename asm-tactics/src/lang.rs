@@ -2,9 +2,12 @@
 pub enum Asm {
     I32Const(u32, Tactic),
     I32Add(Tactic),
+    I32Sub(Tactic),
+    I32Leu(Tactic),
     I8Load(u32, u32, Tactic),
     LocalGet(u32, Tactic),
     LocalSet(u32, Tactic),
+    LocalTee(u32, Tactic),
     Loop(BlockType, Tactic),
 }
 
@@ -109,6 +112,7 @@ pub enum VarTerm {
     Param(usize),
     Hidden(usize),
     I32Load8(Param, Box<VarExpr>),
+    I32Leu(Box<VarExpr>, Box<VarExpr>),
 }
 
 impl std::fmt::Debug for VarTerm {
@@ -117,6 +121,7 @@ impl std::fmt::Debug for VarTerm {
             VarTerm::Param(i) => write!(f, "P{}", i),
             VarTerm::Hidden(i) => write!(f, "H{}", i),
             VarTerm::I32Load8(p, e) => write!(f, "{:?}[{:?}]", p, e),
+            VarTerm::I32Leu(a, b) => write!(f, "({:?} <=u {:?})", a, b),
         }
     }
 }
@@ -137,6 +142,10 @@ impl VarTerm {
             VarTerm::I32Load8(p, e) => VarExpr::i32term(&VarTerm::I32Load8(
                 p.clone(),
                 Box::new(e.eval_params(values)),
+            )),
+            VarTerm::I32Leu(a, b) => VarExpr::i32term(&VarTerm::I32Leu(
+                Box::new(a.eval_params(values)),
+                Box::new(b.eval_params(values)),
             )),
         }
     }
@@ -243,6 +252,13 @@ impl VarExpr {
 
     pub fn u32_lt(&self, other: &Self) -> Expr {
         Expr::U32Lt(self.clone(), other.clone())
+    }
+
+    pub fn i32_leu(&self, other: &Self) -> Self {
+        Self::i32term(&VarTerm::I32Leu(
+            Box::new(self.clone()),
+            Box::new(other.clone()),
+        ))
     }
 
     pub fn zero() -> Self {

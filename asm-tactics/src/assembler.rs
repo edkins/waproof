@@ -46,7 +46,7 @@ impl MachineFacts {
         match t {
             VarTerm::Param(i) => self.param_types[*i].clone(),
             VarTerm::Hidden(i) => self.hidden_types[*i].clone(),
-            VarTerm::I32Load8(_, _) => FullType::I32,
+            VarTerm::I32Load8(_, _) | VarTerm::I32Leu(_, _) => FullType::I32,
         }
     }
 
@@ -92,16 +92,16 @@ impl MachineFacts {
             i += 1;
         }
         print!("    [");
-        for _ in 0..i {
-            print!(".");
-        }
-        print!("] ");
-        for item in &self.stack[i..] {
+        for item in &self.stack[0..i] {
             match item {
-                StackItem::Value(_) => print!("-"),
+                StackItem::Value(_) => print!("."),
                 StackItem::Loop(_, _, _) => print!("|"),
             }
         }
+        print!("] ");
+        /*for _ in &self.stack[i..] {
+            print!("-");
+        }*/
         for item in &other.stack[i..] {
             print!(" {:?}", item);
         }
@@ -162,11 +162,14 @@ pub fn assemble(func: &Func) {
         match instr {
             Asm::I32Const(n, Tactic::Default) => i32_const_default(&mut machine, *n),
             Asm::I32Add(Tactic::Default) => i32_add_default(&mut machine),
+            Asm::I32Sub(Tactic::Default) => i32_sub_default(&mut machine),
+            Asm::I32Leu(Tactic::Default) => i32_leu_default(&mut machine),
             Asm::I8Load(offset, align, Tactic::BasePlusOffset) => {
                 i8_load_base_plus_offset(&mut machine, *offset, *align)
             }
             Asm::LocalGet(i, Tactic::Default) => local_get_default(&mut machine, *i),
             Asm::LocalSet(i, Tactic::Default) => local_set_default(&mut machine, *i),
+            Asm::LocalTee(i, Tactic::Default) => local_tee_default(&mut machine, *i),
             Asm::Loop(BlockType::None, Tactic::Loop(tactics)) => {
                 loop_none_loop(&mut machine, instr_pos, tactics)
             }
@@ -235,6 +238,28 @@ fn local_get_default(machine: &mut MachineFacts, i: u32) {
     machine.push_value(machine.locals[i].clone());
 }
 
+fn local_tee_default(machine: &mut MachineFacts, i: u32) {
+    let i = i as usize;
+    if i >= machine.locals.len() {
+        panic!(
+            "Local index out of range: {} out of {}",
+            i,
+            machine.locals.len()
+        );
+    }
+    let a = machine.pop_value();
+    machine.push_value(a.clone());
+    if machine.locals[i].typ() == a.typ() {
+        machine.locals[i] = a;
+    } else {
+        panic!(
+            "Storing in local of incorrect type, {:?} vs {:?}",
+            machine.locals[i].typ(),
+            a.typ()
+        );
+    }
+}
+
 fn local_set_default(machine: &mut MachineFacts, i: u32) {
     let i = i as usize;
     if i >= machine.locals.len() {
@@ -261,9 +286,25 @@ fn i32_const_default(machine: &mut MachineFacts, n: u32) {
 }
 
 fn i32_add_default(machine: &mut MachineFacts) {
-    let a = machine.pop_value();
-    a.panic_unless_i32();
     let b = machine.pop_value();
     b.panic_unless_i32();
+    let a = machine.pop_value();
+    a.panic_unless_i32();
     machine.push_value(a.i32_add(&b));
+}
+
+fn i32_sub_default(machine: &mut MachineFacts) {
+    let b = machine.pop_value();
+    b.panic_unless_i32();
+    let a = machine.pop_value();
+    a.panic_unless_i32();
+    machine.push_value(a.i32_sub(&b));
+}
+
+fn i32_leu_default(machine: &mut MachineFacts) {
+    let b = machine.pop_value();
+    b.panic_unless_i32();
+    let a = machine.pop_value();
+    a.panic_unless_i32();
+    machine.push_value(a.i32_leu(&b));
 }

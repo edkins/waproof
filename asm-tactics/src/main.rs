@@ -47,6 +47,12 @@ fn reverse() {
                     ),
                 ]),
             ),
+            Asm::LocalGet(1, Tactic::Default),
+            Asm::I32Const(1, Tactic::Default),
+            Asm::I32Sub(Tactic::Default),
+            Asm::LocalTee(1, Tactic::Default),
+            Asm::LocalGet(0, Tactic::Default),
+            Asm::I32Leu(Tactic::Default),
         ],
     };
     assembler::assemble(&func);
