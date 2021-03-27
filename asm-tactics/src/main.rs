@@ -25,7 +25,7 @@ fn tests() {
 
 fn reverse() {
     let func = Func {
-        params: vec![FullType::I8Slice(VarExpr::i32param(0)), FullType::I32],
+        params: vec![FullType::I8Slice(VarExpr::i32param(1)), FullType::I32],
         result: None,
         locals: vec![],
         hidden: vec![],
@@ -53,6 +53,10 @@ fn reverse() {
             Asm::LocalTee(1, Tactic::Default),
             Asm::LocalGet(0, Tactic::Default),
             Asm::I32Leu(Tactic::Default),
+            Asm::BrIf(1, Tactic::Default),
+            Asm::LocalGet(1, Tactic::Default),
+            Asm::LocalGet(0, Tactic::Default),
+            Asm::I8Load(0, 0, Tactic::BasePlusOffset),
         ],
     };
     assembler::assemble(&func);

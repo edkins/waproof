@@ -5,7 +5,16 @@ use crate::lang::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum StackItem {
     Value(VarExpr),
-    Loop(usize, BlockType, usize),
+    Loop {
+        instr_pos: usize,
+        block_type: BlockType,
+        hidden_count: usize,
+        loop_locals: Vec<(usize, VarExpr)>,
+    },
+    Func {
+        end_pos: usize,
+        result: Option<FullType>,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -33,8 +42,13 @@ impl MachineFacts {
             }
         }
 
+        let func_stack_item = StackItem::Func {
+            end_pos: func.body.len(),
+            result: func.result.clone(),
+        };
+
         MachineFacts {
-            stack: vec![],
+            stack: vec![func_stack_item],
             locals,
             param_types: func.params.clone(),
             hidden_types: func.hidden.clone(),
@@ -77,6 +91,38 @@ impl MachineFacts {
         self.stack.push(StackItem::Value(value));
     }
 
+    fn loop_locals(&self) -> Option<&[(usize, VarExpr)]> {
+        let mut i = self.stack.len();
+        loop {
+            if i == 0 {
+                return None;
+            }
+            i -= 1;
+            if let StackItem::Loop { loop_locals, .. } = &self.stack[i] {
+                return Some(loop_locals);
+            }
+        }
+    }
+
+    pub fn can_write_to_local(&self, index: usize) -> bool {
+        if let Some(loop_locals) = self.loop_locals() {
+            loop_locals.iter().any(|(i, _)| *i == index)
+        } else {
+            index < self.locals.len()
+        }
+    }
+
+    pub fn set_local(&mut self, index: usize, value: VarExpr) {
+        if self.can_write_to_local(index) {
+            self.locals[index] = value;
+        } else {
+            panic!(
+                "Cannot write to local {}. It may be out of range or protected by loop logic.",
+                index
+            );
+        }
+    }
+
     pub fn show_diff(&self, other: &Self) {
         let mut i = 0;
         loop {
@@ -95,7 +141,7 @@ impl MachineFacts {
         for item in &self.stack[0..i] {
             match item {
                 StackItem::Value(_) => print!("."),
-                StackItem::Loop(_, _, _) => print!("|"),
+                StackItem::Loop { .. } | StackItem::Func { .. } => print!("|"),
             }
         }
         print!("] ");
@@ -146,6 +192,41 @@ impl MachineFacts {
             panic!("get_i32_base_offset: no address detected");
         }
     }
+
+    pub fn find_label(&self, mut n: usize) -> (Vec<FullType>, usize, usize) {
+        let mut i = self.stack.len();
+        loop {
+            if i == 0 {
+                panic!("Unreachable. Should be guarded by StackItem::Func");
+            }
+            i -= 1;
+            match &self.stack[i] {
+                StackItem::Loop {
+                    instr_pos,
+                    block_type,
+                    ..
+                } => {
+                    if n == 0 {
+                        return (block_type.input_type_vec(), *instr_pos, i);
+                    } else {
+                        n -= 1;
+                    }
+                }
+                StackItem::Func { end_pos, result } => {
+                    if n == 0 {
+                        if let Some(t) = result {
+                            return (vec![t.clone()], *end_pos, i);
+                        } else {
+                            return (vec![], *end_pos, i);
+                        }
+                    } else {
+                        panic!("Invalid depth");
+                    }
+                }
+                StackItem::Value(_) => {}
+            }
+        }
+    }
 }
 
 pub fn assemble(func: &Func) {
@@ -160,6 +241,7 @@ pub fn assemble(func: &Func) {
         instr_pos += 1;
         let prev_machine = machine.clone();
         match instr {
+            Asm::BrIf(n, Tactic::Default) => br_if_default(&mut machine, *n as usize),
             Asm::I32Const(n, Tactic::Default) => i32_const_default(&mut machine, *n),
             Asm::I32Add(Tactic::Default) => i32_add_default(&mut machine),
             Asm::I32Sub(Tactic::Default) => i32_sub_default(&mut machine),
@@ -182,9 +264,27 @@ pub fn assemble(func: &Func) {
     }
 }
 
+fn br_if_default(machine: &mut MachineFacts, n: usize) {
+    let (type_vector, _instr_pos, stack_pos) = machine.find_label(n);
+    if type_vector.len() > 0 {
+        panic!("Currently unable to handle branches with operands");
+    }
+
+    let _value = machine.pop_value();
+
+    match &machine.stack[stack_pos] {
+        StackItem::Loop { .. } => {
+            panic!("Default tactic does not work for loop branches. Need to specify a value for hiddens");
+        }
+        StackItem::Func { .. } => { /*TODO: check postconditions?*/ }
+        StackItem::Value(_) => panic!("find_label should not leave us pointing at a value"),
+    }
+}
+
 fn loop_none_loop(machine: &mut MachineFacts, instr_pos: usize, tactics: &[LoopTactic]) {
     let mut hidden_count = 0;
     let mut hidden_defs = vec![];
+    let mut loop_locals = vec![];
     for tactic in tactics {
         if let LoopTactic::Hidden(h) = tactic {
             hidden_defs.push((Param::Hidden(machine.hidden_types.len()), h.clone()));
@@ -192,16 +292,28 @@ fn loop_none_loop(machine: &mut MachineFacts, instr_pos: usize, tactics: &[LoopT
             hidden_count += 1;
         }
     }
-    machine
-        .stack
-        .push(StackItem::Loop(instr_pos, BlockType::None, hidden_count));
-
     for tactic in tactics {
         if let LoopTactic::Local(i, value) = tactic {
+            loop_locals.push((*i, value.clone()));
+            if !machine.can_write_to_local(*i) {
+                panic!(
+                    "Cannot write to local {} in inner loop if it's not writeable in outer loop",
+                    *i
+                );
+            }
             let value2 = value.eval_params(&hidden_defs);
             machine.local_value_check(*i, &value2);
+
+            // Replace parameter now that we've determined it to be equal
+            machine.locals[*i] = value.clone();
         }
     }
+    machine.stack.push(StackItem::Loop {
+        instr_pos,
+        block_type: BlockType::None,
+        hidden_count,
+        loop_locals,
+    });
 }
 
 fn i8_load_base_plus_offset(machine: &mut MachineFacts, offset: u32, align: u32) {
@@ -250,7 +362,7 @@ fn local_tee_default(machine: &mut MachineFacts, i: u32) {
     let a = machine.pop_value();
     machine.push_value(a.clone());
     if machine.locals[i].typ() == a.typ() {
-        machine.locals[i] = a;
+        machine.set_local(i, a);
     } else {
         panic!(
             "Storing in local of incorrect type, {:?} vs {:?}",
@@ -271,7 +383,7 @@ fn local_set_default(machine: &mut MachineFacts, i: u32) {
     }
     let a = machine.pop_value();
     if machine.locals[i].typ() == a.typ() {
-        machine.locals[i] = a;
+        machine.set_local(i, a);
     } else {
         panic!(
             "Storing in local of incorrect type, {:?} vs {:?}",

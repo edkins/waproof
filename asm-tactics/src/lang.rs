@@ -1,5 +1,6 @@
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Asm {
+    BrIf(u32, Tactic),
     I32Const(u32, Tactic),
     I32Add(Tactic),
     I32Sub(Tactic),
@@ -19,6 +20,14 @@ pub enum Type {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BlockType {
     None,
+}
+
+impl BlockType {
+    pub fn input_type_vec(&self) -> Vec<FullType> {
+        match self {
+            BlockType::None => vec![],
+        }
+    }
 }
 
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]

@@ -14,9 +14,7 @@
 
       local.get 0
       i32.le_u
-      if
-        return
-      end
+      br_if 1
 
       local.get 1
       local.get 0
