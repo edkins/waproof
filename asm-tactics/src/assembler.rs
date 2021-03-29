@@ -1,5 +1,5 @@
 use crate::lang::{
-    Asm, BlockType, Expr, FullType, Func, LoopTactic, Param, Tactic, Type, VarExpr, VarTerm,
+    Asm, BlockType, FullType, Func, LoopTactic, Param, Tactic, Type, VarExpr, VarTerm,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -18,12 +18,28 @@ enum StackItem {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+struct TheoryItem {
+    expr: VarTerm,
+    depth: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct MachineFacts {
     stack: Vec<StackItem>,
     locals: Vec<VarExpr>,
     param_types: Vec<FullType>,
     hidden_types: Vec<FullType>,
-    theory: Vec<Expr>,
+    theory: Vec<TheoryItem>,
+}
+
+fn common_initial_segment<T:PartialEq>(x: &[T], y: &[T]) -> usize {
+    let mut i = 0;
+    loop {
+        if i >= x.len() || i >= y.len() || x[i] != y[i] {
+            return i;
+        }
+        i += 1;
+    }
 }
 
 impl MachineFacts {
@@ -47,12 +63,14 @@ impl MachineFacts {
             result: func.result.clone(),
         };
 
+        let theory = func.preconditions.iter().map(|expr| TheoryItem{expr:expr.clone(), depth:1}).collect();
+
         MachineFacts {
             stack: vec![func_stack_item],
             locals,
             param_types: func.params.clone(),
             hidden_types: func.hidden.clone(),
-            theory: func.preconditions.clone(),
+            theory,
         }
     }
 
@@ -60,13 +78,13 @@ impl MachineFacts {
         match t {
             VarTerm::Param(i) => self.param_types[*i].clone(),
             VarTerm::Hidden(i) => self.hidden_types[*i].clone(),
-            VarTerm::I32Load8(_, _) | VarTerm::I32Leu(_, _) => FullType::I32,
+            VarTerm::I32Load8(_, _) | VarTerm::I32Leu(_, _) | VarTerm::I32Ltu(_, _) => FullType::I32,
         }
     }
 
-    pub fn fact_check(&self, e: &Expr) {
-        for fact in &self.theory {
-            if fact == e {
+    pub fn fact_check(&self, e: &VarTerm) {
+        for theory_item in &self.theory {
+            if theory_item.expr == *e {
                 return;
             }
         }
@@ -124,19 +142,7 @@ impl MachineFacts {
     }
 
     pub fn show_diff(&self, other: &Self) {
-        let mut i = 0;
-        loop {
-            if i >= self.stack.len() {
-                break;
-            }
-            if i >= other.stack.len() {
-                break;
-            }
-            if self.stack[i] != other.stack[i] {
-                break;
-            }
-            i += 1;
-        }
+        let i = common_initial_segment(&self.stack, &other.stack);
         print!("    [");
         for item in &self.stack[0..i] {
             match item {
@@ -165,6 +171,11 @@ impl MachineFacts {
                     );
                 }
             }
+        }
+
+        let i = common_initial_segment(&self.theory, &other.theory);
+        for theory_item in &other.theory[i..] {
+            println!("    fact  {:?}", theory_item.expr);
         }
     }
 
@@ -227,6 +238,17 @@ impl MachineFacts {
             }
         }
     }
+
+    pub fn label_depth(&self) -> usize {
+        let mut depth = 0;
+        for item in &self.stack {
+            match item {
+                StackItem::Loop{..} | StackItem::Func{..} => depth += 1,
+                StackItem::Value(_) => {}
+            }
+        }
+        depth
+    }
 }
 
 pub fn assemble(func: &Func) {
@@ -270,7 +292,7 @@ fn br_if_default(machine: &mut MachineFacts, n: usize) {
         panic!("Currently unable to handle branches with operands");
     }
 
-    let _value = machine.pop_value();
+    let value = machine.pop_value();
 
     match &machine.stack[stack_pos] {
         StackItem::Loop { .. } => {
@@ -279,6 +301,8 @@ fn br_if_default(machine: &mut MachineFacts, n: usize) {
         StackItem::Func { .. } => { /*TODO: check postconditions?*/ }
         StackItem::Value(_) => panic!("find_label should not leave us pointing at a value"),
     }
+
+    machine.theory.push(TheoryItem{expr:value.as_term().opposite(), depth: machine.label_depth()});
 }
 
 fn loop_none_loop(machine: &mut MachineFacts, instr_pos: usize, tactics: &[LoopTactic]) {
@@ -328,7 +352,7 @@ fn i8_load_base_plus_offset(machine: &mut MachineFacts, offset: u32, align: u32)
 
     let (base_param, index) = machine.get_i32_base_offset(&addr);
     if let FullType::I8Slice(len_param) = machine.get_term_type(&base_param) {
-        machine.fact_check(&index.u32_lt(&len_param));
+        machine.fact_check(&index.i32_ltu(&len_param));
         machine.push_value(VarExpr::i32term(&base_param.as_param().i32_load8(&index)));
     } else {
         panic!(
@@ -418,5 +442,5 @@ fn i32_leu_default(machine: &mut MachineFacts) {
     b.panic_unless_i32();
     let a = machine.pop_value();
     a.panic_unless_i32();
-    machine.push_value(a.i32_leu(&b));
+    machine.push_value(a.i32_leu(&b).as_expr());
 }

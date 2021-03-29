@@ -48,13 +48,15 @@ fn reverse() {
                 ]),
             ),
             Asm::LocalGet(1, Tactic::Default),
-            Asm::I32Const(1, Tactic::Default),
-            Asm::I32Sub(Tactic::Default),
-            Asm::LocalTee(1, Tactic::Default),
             Asm::LocalGet(0, Tactic::Default),
             Asm::I32Leu(Tactic::Default),
             Asm::BrIf(1, Tactic::Default),
+
             Asm::LocalGet(1, Tactic::Default),
+            Asm::I32Const(1, Tactic::Default),
+            Asm::I32Sub(Tactic::Default),
+            Asm::LocalTee(1, Tactic::Default),
+
             Asm::LocalGet(0, Tactic::Default),
             Asm::I8Load(0, 0, Tactic::BasePlusOffset),
         ],
@@ -68,7 +70,7 @@ fn slice_get() {
         result: Some(FullType::I32),
         locals: vec![],
         hidden: vec![FullType::I32],
-        preconditions: vec![VarExpr::i32param(1).u32_lt(&VarExpr::i32hidden(0))],
+        preconditions: vec![VarExpr::i32param(1).i32_ltu(&VarExpr::i32hidden(0))],
         body: vec![
             Asm::LocalGet(1, Tactic::Default),
             Asm::LocalGet(0, Tactic::Default),

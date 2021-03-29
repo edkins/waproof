@@ -8,15 +8,15 @@
     
     loop
       local.get 1
-      i32.const 1
-      i32.sub
-      local.tee 1
-
       local.get 0
       i32.le_u
       br_if 1
 
       local.get 1
+      i32.const 1
+      i32.sub
+      local.tee 1
+
       local.get 0
       i32.load8_u
 

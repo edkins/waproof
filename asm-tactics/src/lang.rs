@@ -94,7 +94,7 @@ pub struct Func {
     pub result: Option<FullType>,
     pub locals: Vec<Type>,
     pub hidden: Vec<FullType>,
-    pub preconditions: Vec<Expr>,
+    pub preconditions: Vec<VarTerm>,
     pub body: Vec<Asm>,
 }
 
@@ -111,17 +111,13 @@ pub enum LoopTactic {
     Local(usize, VarExpr),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Expr {
-    U32Lt(VarExpr, VarExpr),
-}
-
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub enum VarTerm {
     Param(usize),
     Hidden(usize),
     I32Load8(Param, Box<VarExpr>),
     I32Leu(Box<VarExpr>, Box<VarExpr>),
+    I32Ltu(Box<VarExpr>, Box<VarExpr>),
 }
 
 impl std::fmt::Debug for VarTerm {
@@ -131,6 +127,7 @@ impl std::fmt::Debug for VarTerm {
             VarTerm::Hidden(i) => write!(f, "H{}", i),
             VarTerm::I32Load8(p, e) => write!(f, "{:?}[{:?}]", p, e),
             VarTerm::I32Leu(a, b) => write!(f, "({:?} <=u {:?})", a, b),
+            VarTerm::I32Ltu(a, b) => write!(f, "({:?} <u {:?})", a, b),
         }
     }
 }
@@ -142,6 +139,10 @@ impl VarTerm {
             VarTerm::Hidden(i) => Param::Hidden(*i),
             _ => panic!("Expected param or hidden, got {:?}", self),
         }
+    }
+
+    pub fn as_expr(&self) -> VarExpr {
+        VarExpr::i32term(self)   // TODO: not i32
     }
 
     pub fn eval_params(&self, values: &[(Param, VarExpr)]) -> VarExpr {
@@ -156,6 +157,18 @@ impl VarTerm {
                 Box::new(a.eval_params(values)),
                 Box::new(b.eval_params(values)),
             )),
+            VarTerm::I32Ltu(a, b) => VarExpr::i32term(&VarTerm::I32Ltu(
+                Box::new(a.eval_params(values)),
+                Box::new(b.eval_params(values)),
+            )),
+        }
+    }
+
+    pub fn opposite(&self) -> VarTerm {
+        match self {
+            VarTerm::I32Leu(a, b) => VarTerm::I32Ltu(b.clone(), a.clone()),
+            VarTerm::I32Ltu(a, b) => VarTerm::I32Leu(b.clone(), a.clone()),
+            _ => panic!("Not implemented opposite yet for {:?}", self)
         }
     }
 }
@@ -259,15 +272,18 @@ impl VarExpr {
         }
     }
 
-    pub fn u32_lt(&self, other: &Self) -> Expr {
-        Expr::U32Lt(self.clone(), other.clone())
-    }
-
-    pub fn i32_leu(&self, other: &Self) -> Self {
-        Self::i32term(&VarTerm::I32Leu(
+    pub fn i32_leu(&self, other: &Self) -> VarTerm {
+        VarTerm::I32Leu(
             Box::new(self.clone()),
             Box::new(other.clone()),
-        ))
+        )
+    }
+
+    pub fn i32_ltu(&self, other: &Self) -> VarTerm {
+        VarTerm::I32Ltu(
+            Box::new(self.clone()),
+            Box::new(other.clone()),
+        )
     }
 
     pub fn zero() -> Self {
@@ -301,6 +317,18 @@ impl VarExpr {
                     vec.extend_from_slice(&nexpr_xs);
                 }
                 Self::canonical(k1, vec)
+            }
+        }
+    }
+
+    pub fn as_term(&self) -> VarTerm {
+        match self {
+            VarExpr::I32Linear(k, xs) => {
+                if *k == 0 && xs.len() == 1 && xs[0].1 == 1 {
+                    xs[0].0.clone()
+                } else {
+                    panic!("Cannot convert {:?} to term", self);
+                }
             }
         }
     }
